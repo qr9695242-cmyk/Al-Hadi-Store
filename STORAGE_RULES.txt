@@ -1,14 +1,5 @@
-// Firebase Console > Storage > Rules mein jaakar yeh paste kar ke Publish karein:
-// (Yeh product photos ko upload/read karne ki ijazat deta hai — admin panel
-// ka login real Firebase Auth session nahi banata, is liye Firestore rules
-// ki tarah yahan bhi open write rakhni zaroori hai.)
-
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /products/{allPaths=**} {
-      allow read: if true;
-      allow write: if true;
-    }
-  }
-}
+// NOTE: Ab is file ki zaroorat nahi hai.
+// Firebase Storage use karne ke liye paid "Blaze" plan chahiye hota hai,
+// is liye humne uski jagah photos ko compress kar ke seedha Firestore
+// document ke andar (base64 ke tor par) save karne ka tareeqa istemal kiya
+// hai — bina kisi billing/card ke.

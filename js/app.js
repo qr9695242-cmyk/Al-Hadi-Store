@@ -860,16 +860,36 @@ function compressImageFile(file, maxDim, quality){
   });
 }
 
-/* Uploads a (compressed) photo to Firebase Storage and returns its public
-   download URL — this is what actually fixes the "exceeds maximum allowed
-   size of 1,048,576 bytes" Firestore error, since only a short URL string
-   is stored in the product document instead of the whole image. */
-async function uploadImageToStorage(file, productId){
-  const blob = await compressImageFile(file, 1600, 0.82);
-  const path = 'products/' + productId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '.jpg';
-  const ref = firebase.storage().ref().child(path);
-  await ref.put(blob, {contentType: 'image/jpeg'});
-  return await ref.getDownloadURL();
+function blobToDataUrl(blob){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+/* Keeps shrinking a photo (smaller dimensions, lower JPEG quality) until its
+   base64 form fits comfortably inside Firestore's 1MB-per-document limit.
+   Firebase Storage would be the "proper" way to host images, but it now
+   requires the paid Blaze plan just to enable — this avoids that entirely
+   by keeping images small enough to live directly in the product document. */
+async function compressImageUnderLimit(file, maxBytes){
+  maxBytes = maxBytes || 350000; // per-image budget (bytes of the base64 string)
+  const attempts = [
+    {maxDim:1100, quality:0.7},
+    {maxDim:900,  quality:0.55},
+    {maxDim:700,  quality:0.45},
+    {maxDim:500,  quality:0.4}
+  ];
+  let lastDataUrl = null;
+  for(let i=0;i<attempts.length;i++){
+    const blob = await compressImageFile(file, attempts[i].maxDim, attempts[i].quality);
+    const dataUrl = await blobToDataUrl(blob);
+    lastDataUrl = dataUrl;
+    if(dataUrl.length <= maxBytes) return dataUrl;
+  }
+  throw new Error('Photo bohot bari hai — chhoti ya kam-resolution wali photo try karein, ya kam photos add karein.');
 }
 
 /* ---------- size chip helpers ---------- */
@@ -934,13 +954,20 @@ async function submitAddProduct(e){
     return false;
   }
 
+  if(files.length > 4){
+    errEl.textContent = 'Ek dafa mein zyada se zyada 4 photos upload karein (document size limit ki wajah se).';
+    errEl.classList.add('show');
+    return false;
+  }
+
   const productId = editId || ('admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
 
   let uploadedImages = [];
   try{
-    uploadedImages = await Promise.all(files.map(f=>uploadImageToStorage(f, productId).then(src=>({src:src, alt:name}))));
+    const perImageBudget = Math.floor(600000 / Math.max(files.length, 1)); // shared budget so total stays well under 1MB
+    uploadedImages = await Promise.all(files.map(f=>compressImageUnderLimit(f, perImageBudget).then(src=>({src:src, alt:name}))));
   }catch(err){
-    errEl.textContent = 'Photo upload fail ho gaya. Internet check karein ya Firebase Storage settings dekhein. (' + ((err && err.message) || 'unknown error') + ')';
+    errEl.textContent = (err && err.message) || 'Photo process nahi ho saki.';
     errEl.classList.add('show');
     return false;
   }
