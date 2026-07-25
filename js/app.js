@@ -6,7 +6,8 @@
 const DELIVERY_CHARGE = 200;
 const CATEGORY_LABELS = {
   kapray:'Clothing', joote:'Footwear', mobile:'Mobile & Accessories',
-  exercise:'Fitness', electronics:'Electronics', other:'Lifestyle'
+  exercise:'Fitness', electronics:'Electronics', other:'Lifestyle',
+  toys:'Toy & Game'
 };
 
 const CATEGORY_ICONS = {
@@ -15,8 +16,28 @@ const CATEGORY_ICONS = {
   mobile:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg>',
   electronics:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.8 2.8M16.2 16.2l2.8 2.8"/></svg>',
   exercise:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6.5 6.5 17.5 17.5M4 9l3-3M17 20l3-3M2 11l3 3M18 5l3 3"/></svg>',
-  other:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20.6 12.3 12.3 20.6a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1 0-2.1L11.5 3.2a1.5 1.5 0 0 1 2.1 0l7 7c.6.6.6 1.5 0 2.1z"/></svg>'
+  other:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20.6 12.3 12.3 20.6a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1 0-2.1L11.5 3.2a1.5 1.5 0 0 1 2.1 0l7 7c.6.6.6 1.5 0 2.1z"/></svg>',
+  toys:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V6a2 2 0 1 1 2 2h-2ZM12 8V6a2 2 0 1 0-2 2h2ZM3 13h18"/></svg>'
 };
+
+/* Category name normalizer: lets custom/typo'd category text (e.g. "Kapra",
+   "Toy & Game", typed freely in the admin panel) still resolve to a proper
+   icon + label instead of falling back to the generic placeholder. */
+const CATEGORY_ALIASES = {
+  kapra:'kapray', kapre:'kapray', kapray:'kapray', kapras:'kapray',
+  clothing:'kapray', clothes:'kapray',
+  joote:'joote', jotay:'joote', joota:'joote', shoes:'joote', footwear:'joote',
+  mobile:'mobile', mobiles:'mobile', 'mobile & accessories':'mobile', 'mobile and accessories':'mobile', accessories:'mobile',
+  electronics:'electronics', electronic:'electronics',
+  exercise:'exercise', fitness:'exercise', gym:'exercise',
+  toy:'toys', toys:'toys', 'toy & game':'toys', 'toy and game':'toys', 'toys & games':'toys', game:'toys', games:'toys',
+  lifestyle:'other', other:'other'
+};
+function catKey(c){
+  if(!c) return 'other';
+  const norm = String(c).trim().toLowerCase();
+  return CATEGORY_ALIASES[norm] || norm;
+}
 
 let ALL_PRODUCTS = [];
 let CART = [];
@@ -65,7 +86,7 @@ function money(n){ return 'Rs ' + Number(n||0).toLocaleString('en-PK'); }
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function discountPct(p){ if(!p.oldPrice || p.oldPrice<=p.price) return 0; return Math.round((1 - p.price/p.oldPrice)*100); }
 function firstImg(p){ return (p.images && p.images[0] && p.images[0].src) || ''; }
-function catLabel(c){ return CATEGORY_LABELS[c] || (c ? c.charAt(0).toUpperCase()+c.slice(1) : 'Lifestyle'); }
+function catLabel(c){ const k=catKey(c); return CATEGORY_LABELS[k] || (c ? String(c).charAt(0).toUpperCase()+String(c).slice(1) : 'Lifestyle'); }
 function starSvg(){ return '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.4 7.2 17.7l.9-5.4L4.2 8.7l5.4-.8z"/></svg>'; }
 
 /* ---------- product rendering ---------- */
@@ -145,7 +166,7 @@ function buildCategories(){
       '</span><span>All</span></button>';
     cats.forEach(c => {
       ch += '<button class="cat-circle" data-cat="'+escapeHtml(c)+'" onclick="setFilter(\''+c+'\')"><span class="ring">'+
-        (CATEGORY_ICONS[c]||CATEGORY_ICONS.other)+'</span><span>'+escapeHtml(catLabel(c))+'</span></button>';
+        (CATEGORY_ICONS[catKey(c)]||CATEGORY_ICONS.other)+'</span><span>'+escapeHtml(catLabel(c))+'</span></button>';
     });
     circles.innerHTML = ch;
   }
