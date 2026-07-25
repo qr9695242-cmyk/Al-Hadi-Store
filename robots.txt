@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://al-hadi-store-fixed-1.vercel.app/sitemap.xml
