@@ -1,12 +1,20 @@
-// Firebase configuration for Al Hadi Store
-const firebaseConfig = {
-  apiKey: "AIzaSyAo4F7zUDA9mnwPdSXNZEB0B2t8CLZwG2s",
-  authDomain: "al-hadi-store-b.firebaseapp.com",
-  projectId: "al-hadi-store-b",
-  storageBucket: "al-hadi-store-b.firebasestorage.app",
-  messagingSenderId: "773720271675",
-  appId: "1:773720271675:web:01c1c2d5caa4e8a87c251e"
-};
+// جاؤ Firebase Console > Firestore Database > Rules اور یہ rules پیسٹ کر کے Publish کریں:
 
-// Initialize Firebase (requires Firebase SDK <script> tags loaded in index.html first)
-firebase.initializeApp(firebaseConfig);
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admin products collection — admin panel ka login sirf app ke andar
+    // (username/password) check hota hai, real Firebase Auth session nahi
+    // banata, is liye "if false" hamesha har save ko block kar deta tha.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // User liked products — yeh Firebase Auth (email/password) use karta hai
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId;
+    }
+  }
+}

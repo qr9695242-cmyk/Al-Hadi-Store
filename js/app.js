@@ -808,7 +808,12 @@ function sanitizeForFirestore(value){
 
 async function saveCustomProduct(product){
   const clean = sanitizeForFirestore(product);
-  await firebase.firestore().collection('products').doc(clean.id).set(clean);
+  try{
+    await firebase.firestore().collection('products').doc(clean.id).set(clean);
+  }catch(err){
+    console.error('saveCustomProduct failed. Payload sent to Firestore:', clean, 'Original error:', err);
+    throw err;
+  }
   return clean;
 }
 async function deleteCustomProduct(id){
@@ -871,7 +876,7 @@ async function submitAddProduct(e){
   const sizes = sizesRaw ? sizesRaw.split(',').map(s=>s.trim()).filter(s => s.length > 0) : ['Standard'];
   const flashSale = document.getElementById('apFlashSale').value === 'yes';
   const stockStatus = document.getElementById('apStock').value;
-  const stockQtyRaw = document.getElementById('apStockQty').value;
+  const stockQtyRaw = document.getElementById('apStockQty').value.trim().replace(/[^\d]/g,'');
   const stockQty = stockQtyRaw !== '' ? Math.max(0, parseInt(stockQtyRaw,10)||0) : null;
   const hidden = document.getElementById('apVisible').value === 'no';
   const deliveryRaw = document.getElementById('apDelivery').value;
