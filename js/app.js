@@ -101,15 +101,37 @@ function renderProductCard(p){
   );
 }
 
+/* Flash Sale products first, then New, then everything else. Sort is stable
+   (native Array#sort preserves relative order within same rank), so within
+   each group products keep their existing order. */
+function productRank(p){
+  if(p.flashSale) return 0;
+  if(p.badge === 'New') return 1;
+  return 2;
+}
+
+function normKey(s){ return String(s||'').trim().toLowerCase(); }
+/* Grouping key: two categories are "the same" if their display label matches
+   once trimmed/lowercased — this is what stops "Clothing" and "kapray" (or
+   "Clothing" typed twice with different spacing) from showing as separate
+   category buttons. */
+function catKey(c){ return normKey(catLabel(c)); }
+/* label(lowercase) -> official predefined category code, e.g. 'clothing' -> 'kapray'.
+   Used so a manually-typed category that matches a known one re-uses its code/icon. */
+const PREDEFINED_KEY_TO_CODE = {};
+Object.keys(CATEGORY_LABELS).forEach(code => { PREDEFINED_KEY_TO_CODE[normKey(CATEGORY_LABELS[code])] = code; });
+let CATEGORY_GROUPS = {}; // key -> { label, code }
+
 function renderProducts(){
   const grid = document.getElementById('productGrid');
   const info = document.getElementById('resultInfo');
   let list = ALL_PRODUCTS.filter(p => !p.hidden);
-  if(currentFilter !== 'all') list = list.filter(p => (p.category||'other') === currentFilter);
+  if(currentFilter !== 'all') list = list.filter(p => catKey(p.category) === currentFilter);
   if(currentSearch){
     const q = currentSearch.toLowerCase();
     list = list.filter(p => (p.name+' '+(p.desc||'')+' '+catLabel(p.category)).toLowerCase().includes(q));
   }
+  list = list.slice().sort((a,b) => productRank(a) - productRank(b));
   if(list.length === 0){
     grid.innerHTML = '<div class="empty"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><b>Koi product nahi mila</b><p>Doosri category try karein ya search badlein.</p></div>';
   } else {
@@ -117,24 +139,33 @@ function renderProducts(){
   }
   if(info){
     if(currentSearch) info.textContent = list.length+' result'+(list.length!==1?'s':'')+' for "'+currentSearch+'"';
-    else if(currentFilter!=='all') info.textContent = list.length+' item'+(list.length!==1?'s':'')+' in '+catLabel(currentFilter);
+    else if(currentFilter!=='all') info.textContent = list.length+' item'+(list.length!==1?'s':'')+' in '+((CATEGORY_GROUPS[currentFilter]&&CATEGORY_GROUPS[currentFilter].label)||catLabel(currentFilter));
     else info.textContent = 'Browse the full Al Hadi Store collection';
   }
 }
 
 /* ---------- category tabs & nav ---------- */
 function buildCategories(){
-  const cats = [];
-  ALL_PRODUCTS.forEach(p => { const c=p.category||'other'; if(!cats.includes(c)) cats.push(c); });
+  // Group every product's category by its display label so near-duplicate
+  // category values (different casing/spelling meaning the same thing) collapse
+  // into a single tab/circle instead of showing twice.
+  const groups = {};
+  ALL_PRODUCTS.forEach(p => {
+    const raw = p.category || 'other';
+    const key = catKey(raw);
+    if(!groups[key]) groups[key] = { label: catLabel(raw), code: PREDEFINED_KEY_TO_CODE[key] || raw };
+  });
+  CATEGORY_GROUPS = groups;
+  const keys = Object.keys(groups);
 
   const tabs = document.getElementById('catTabs');
   let th = '<button class="active" data-cat="all" onclick="setFilter(\'all\')">All Products</button>';
-  cats.forEach(c => th += '<button data-cat="'+escapeHtml(c)+'" onclick="setFilter(\''+c+'\')">'+escapeHtml(catLabel(c))+'</button>');
+  keys.forEach(k => th += '<button data-cat="'+escapeHtml(k)+'" onclick="setFilter(\''+k+'\')">'+escapeHtml(groups[k].label)+'</button>');
   tabs.innerHTML = th;
 
   const nav = document.getElementById('catNav');
   let nh = '<a href="#shop" class="active" onclick="setFilter(\'all\')">All</a>';
-  cats.forEach(c => nh += '<a href="#shop" onclick="setFilter(\''+c+'\')">'+escapeHtml(catLabel(c))+'</a>');
+  keys.forEach(k => nh += '<a href="#shop" onclick="setFilter(\''+k+'\')">'+escapeHtml(groups[k].label)+'</a>');
   nh += '<a href="#payment">Payment</a><a href="mailto:qraza2376@gmail.com">Contact</a>';
   nav.innerHTML = nh;
 
@@ -143,9 +174,9 @@ function buildCategories(){
     let ch = '<button class="cat-circle active" data-cat="all" onclick="setFilter(\'all\')"><span class="ring">'+
       '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'+
       '</span><span>All</span></button>';
-    cats.forEach(c => {
-      ch += '<button class="cat-circle" data-cat="'+escapeHtml(c)+'" onclick="setFilter(\''+c+'\')"><span class="ring">'+
-        (CATEGORY_ICONS[c]||CATEGORY_ICONS.other)+'</span><span>'+escapeHtml(catLabel(c))+'</span></button>';
+    keys.forEach(k => {
+      ch += '<button class="cat-circle" data-cat="'+escapeHtml(k)+'" onclick="setFilter(\''+k+'\')"><span class="ring">'+
+        (CATEGORY_ICONS[groups[k].code]||CATEGORY_ICONS.other)+'</span><span>'+escapeHtml(groups[k].label)+'</span></button>';
     });
     circles.innerHTML = ch;
   }
@@ -155,6 +186,61 @@ function buildCategories(){
     const items = ['Sale Is Live','Free Shipping On Orders Over Rs 3000','Cash On Delivery Available','100% Original Products','Easy Returns Within 3 Days'];
     const one = items.map(t => '<span class="marquee-item"><span class="pct">%</span>'+escapeHtml(t)+'</span>').join('');
     marquee.innerHTML = '<span class="marquee-set">'+one+'</span><span class="marquee-set">'+one+'</span>';
+  }
+
+  populateCategoryDropdown();
+}
+
+/* ---------- admin "add product" category dropdown ---------- */
+function populateCategoryDropdown(){
+  const sel = document.getElementById('apCategory');
+  if(!sel) return;
+  const prevValue = sel.value;
+  // Predefined categories first (in a fixed, friendly order), then any extra
+  // categories that exist in real product data but aren't predefined.
+  const order = ['kapray','joote','mobile','exercise','electronics','other'];
+  const seen = new Set();
+  let oh = '';
+  order.forEach(code => {
+    const key = normKey(CATEGORY_LABELS[code]);
+    seen.add(key);
+    oh += '<option value="'+escapeHtml(code)+'">'+escapeHtml(CATEGORY_LABELS[code])+'</option>';
+  });
+  Object.keys(CATEGORY_GROUPS).forEach(key => {
+    if(seen.has(key)) return;
+    seen.add(key);
+    oh += '<option value="'+escapeHtml(CATEGORY_GROUPS[key].code)+'">'+escapeHtml(CATEGORY_GROUPS[key].label)+'</option>';
+  });
+  oh += '<option value="__new__">+ Naya Category</option>';
+  sel.innerHTML = oh;
+  if(prevValue && Array.from(sel.options).some(o=>o.value===prevValue)) sel.value = prevValue;
+}
+
+function onCategorySelectChange(){
+  const sel = document.getElementById('apCategory');
+  const newInput = document.getElementById('apCategoryNew');
+  if(!sel || !newInput) return;
+  const isNew = sel.value === '__new__';
+  newInput.style.display = isNew ? 'block' : 'none';
+  if(!isNew) newInput.value = '';
+}
+
+/* Selects the dropdown option matching a product's raw category (used when
+   opening the edit-product form), falling back to "+ Naya Category" with the
+   raw value pre-filled if it truly doesn't match anything known yet. */
+function setCategoryFieldValue(rawCategory){
+  const sel = document.getElementById('apCategory');
+  const newInput = document.getElementById('apCategoryNew');
+  if(!sel) return;
+  const key = catKey(rawCategory || 'other');
+  const code = PREDEFINED_KEY_TO_CODE[key] || (CATEGORY_GROUPS[key] && CATEGORY_GROUPS[key].code) || rawCategory;
+  const hasOption = Array.from(sel.options).some(o=>o.value===code);
+  if(hasOption){
+    sel.value = code;
+    if(newInput){ newInput.style.display='none'; newInput.value=''; }
+  } else {
+    sel.value = '__new__';
+    if(newInput){ newInput.style.display='block'; newInput.value = rawCategory || ''; }
   }
 }
 
@@ -167,6 +253,7 @@ function setFilter(cat){
   const shop = document.getElementById('shop');
   if(shop) shop.scrollIntoView({behavior:'smooth'});
 }
+
 
 /* ---------- search ---------- */
 document.getElementById('searchInput').addEventListener('input', function(){
@@ -932,7 +1019,10 @@ async function submitAddProduct(e){
 
   const editId = document.getElementById('apEditId').value;
   const name = document.getElementById('apName').value.trim();
-  const category = document.getElementById('apCategory').value.trim() || 'other';
+  const categorySel = document.getElementById('apCategory').value;
+  const category = (categorySel === '__new__'
+    ? (document.getElementById('apCategoryNew').value.trim() || 'other')
+    : (categorySel || 'other'));
   const price = Number(document.getElementById('apPrice').value);
   const oldPriceRaw = document.getElementById('apOldPrice').value;
   const oldPrice = oldPriceRaw ? Number(oldPriceRaw) : null;
@@ -1024,6 +1114,8 @@ async function submitAddProduct(e){
 
   document.getElementById('addProductForm').reset();
   document.getElementById('apEditId').value = '';
+  document.getElementById('apCategoryNew').style.display = 'none';
+  document.getElementById('apCategoryNew').value = '';
   document.getElementById('apDelivery').value = 200;
   document.getElementById('apStockQty').value = '';
   document.getElementById('apVisible').value = 'yes';
@@ -1038,7 +1130,7 @@ function editAdminProduct(id){
   if(!p) return;
   document.getElementById('apEditId').value = p.id;
   document.getElementById('apName').value = p.name || '';
-  document.getElementById('apCategory').value = p.category || '';
+  setCategoryFieldValue(p.category);
   document.getElementById('apPrice').value = p.price || '';
   document.getElementById('apOldPrice').value = p.oldPrice || '';
   document.getElementById('apImageUrls').value = (p.images||[]).map(im=>im.src).filter(s=>s && !s.startsWith('data:')).join(', ');
