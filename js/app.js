@@ -829,6 +829,49 @@ function fileToDataUrl(file){
   });
 }
 
+/* Resizes/compresses an uploaded photo before it leaves the device — a raw
+   phone-camera photo can be several MB, which blows past Firestore's 1MB
+   per-document limit if embedded directly. Shrinking to maxDim px + JPEG
+   compression keeps it small whether it ends up in Storage or (as a
+   fallback) inline. */
+function compressImageFile(file, maxDim, quality){
+  maxDim = maxDim || 1600;
+  quality = quality || 0.82;
+  return new Promise((resolve, reject) => {
+    const objUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let width = img.naturalWidth, height = img.naturalHeight;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+        else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objUrl);
+        if (blob) resolve(blob); else reject(new Error('Image compress nahi ho saka'));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Photo load nahi ho saki')); };
+    img.src = objUrl;
+  });
+}
+
+/* Uploads a (compressed) photo to Firebase Storage and returns its public
+   download URL — this is what actually fixes the "exceeds maximum allowed
+   size of 1,048,576 bytes" Firestore error, since only a short URL string
+   is stored in the product document instead of the whole image. */
+async function uploadImageToStorage(file, productId){
+  const blob = await compressImageFile(file, 1600, 0.82);
+  const path = 'products/' + productId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '.jpg';
+  const ref = firebase.storage().ref().child(path);
+  await ref.put(blob, {contentType: 'image/jpeg'});
+  return await ref.getDownloadURL();
+}
+
 /* ---------- size chip helpers ---------- */
 function toggleSizeChip(btn){
   const sizesInput = document.getElementById('apSizes');
@@ -891,11 +934,13 @@ async function submitAddProduct(e){
     return false;
   }
 
+  const productId = editId || ('admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
+
   let uploadedImages = [];
   try{
-    uploadedImages = await Promise.all(files.map(f=>fileToDataUrl(f).then(src=>({src:src, alt:name}))));
+    uploadedImages = await Promise.all(files.map(f=>uploadImageToStorage(f, productId).then(src=>({src:src, alt:name}))));
   }catch(err){
-    errEl.textContent = 'Could not read the selected image file(s).';
+    errEl.textContent = 'Photo upload fail ho gaya. Internet check karein ya Firebase Storage settings dekhein. (' + ((err && err.message) || 'unknown error') + ')';
     errEl.classList.add('show');
     return false;
   }
@@ -905,7 +950,7 @@ async function submitAddProduct(e){
   if(!images.length && existing) images = existing.images;
 
   const product = {
-    id: editId || ('admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7)),
+    id: productId,
     category: category,
     name: name,
     price: price,
