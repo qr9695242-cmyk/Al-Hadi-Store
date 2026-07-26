@@ -27,5 +27,12 @@ service cloud.firestore {
       allow create: if true;
       allow update, delete: if true;   // TODO: baad mein admin-only banayein
     }
+
+    // Analytics summary (site visits, product views, add-to-cart counts) —
+    // ek hi document mein counters store hote hain, koi personal data nahi.
+    match /analytics/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

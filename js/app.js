@@ -266,6 +266,7 @@ function focusResults(){ document.getElementById('shop').scrollIntoView({behavio
 function openProduct(id, fromURL){
   const p = ALL_PRODUCTS.find(x => x.id===id);
   if(!p) return;
+  trackEvent('product_view', id);
   PD = { product:p, index:0, size:(p.sizes&&p.sizes.length?p.sizes[0]:null), qty:1 };
   renderDetail();
   document.getElementById('productModal').classList.add('open');
@@ -340,6 +341,7 @@ function saveCart(){ try{ localStorage.setItem('ahs_cart', JSON.stringify(CART))
 function cartKey(id,size){ return id+'::'+(size||''); }
 function addToCart(p, size, qty){
   qty = qty||1;
+  trackEvent('add_to_cart', p.id);
   const key = cartKey(p.id, size);
   const found = CART.find(i => i.key===key);
   if(found){ found.qty += qty; }
@@ -1369,7 +1371,10 @@ function switchAdminTab(tab){
   if(btn) btn.classList.add('active');
   document.getElementById('adminPane-products').style.display = (tab==='products') ? 'block' : 'none';
   document.getElementById('adminPane-orders').style.display = (tab==='orders') ? 'block' : 'none';
+  document.getElementById('adminPane-bulk').style.display = (tab==='bulk') ? 'block' : 'none';
+  document.getElementById('adminPane-analytics').style.display = (tab==='analytics') ? 'block' : 'none';
   if(tab==='orders') loadAdminOrders();
+  if(tab==='analytics') loadAdminAnalytics();
 }
 function loadAdminOrders(){
   const list = document.getElementById('adminOrdersList');
@@ -1413,7 +1418,198 @@ function updateOrderStatus(id, status){
     .catch(function(){ toast('Status update fail ho gaya'); });
 }
 
+/* ---------- admin: CSV bulk upload ---------- */
+function downloadSampleCsv(){
+  const header = 'name,category,price,oldPrice,images,videoUrl,colors,sizes,flashSale,stockStatus,stockQty,hidden,deliveryCharge,desc';
+  const example1 = 'Ishq Calligraphy T-Shirt,kapray,1000,1300,"https://example.com/img1.jpg;https://example.com/img2.jpg",,,"Small;Medium;Large;X-Large",no,in,20,no,200,"Men\'s olive green cotton tee"';
+  const example2 = 'Rexine Slides,joota,800,,https://example.com/slide1.jpg,,"Black;White",Standard,yes,in,,no,150,';
+  const csv = [header, example1, example2].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'al-hadi-store-sample-products.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* Minimal CSV parser — handles quoted fields (so commas/newlines inside
+   a "..." cell, e.g. a description, don't break columns). */
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else { inQuotes = false; }
+      } else { field += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = '';
+        if(!(row.length===1 && row[0]==='')){ rows.push(row); }
+        row = [];
+      } else { field += c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  if(!rows.length) return [];
+  const headers = rows[0].map(h=>h.trim());
+  return rows.slice(1)
+    .filter(r => r.some(c => c.trim() !== ''))
+    .map(r => {
+      const obj = {};
+      headers.forEach((h,idx)=>{ obj[h] = (r[idx] !== undefined ? r[idx].trim() : ''); });
+      return obj;
+    });
+}
+
+async function handleBulkUpload(){
+  const fileInput = document.getElementById('bulkCsvFile');
+  const resultEl = document.getElementById('bulkUploadResult');
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){ resultEl.innerHTML = '<p style="color:#c0392b;">Pehle CSV file select karein.</p>'; return; }
+
+  resultEl.innerHTML = '<p style="color:var(--muted);">Padha ja raha hai…</p>';
+  let rows;
+  try{
+    const text = await file.text();
+    rows = parseCSV(text);
+  }catch(e){
+    resultEl.innerHTML = '<p style="color:#c0392b;">CSV file parh nahi saka — file format check karein.</p>';
+    return;
+  }
+  if(!rows.length){ resultEl.innerHTML = '<p style="color:#c0392b;">CSV mein koi product row nahi mili.</p>'; return; }
+
+  let successCount = 0, failCount = 0;
+  const errors = [];
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i];
+    const name = (r.name||'').trim();
+    const price = Number(r.price);
+    if(!name || !price){ failCount++; errors.push('Row '+(i+2)+': naam ya price missing/invalid hai.'); continue; }
+    const images = (r.images||'').split(';').map(s=>s.trim()).filter(Boolean).map(u=>({src:u, alt:name}));
+    if(!images.length){ failCount++; errors.push('Row '+(i+2)+' ('+name+'): kam az kam ek image URL zaroori hai.'); continue; }
+    const sizesList = (r.sizes||'').split(';').map(s=>s.trim()).filter(Boolean);
+    const productId = 'admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '_' + i;
+    const product = {
+      id: productId,
+      category: (r.category||'').trim() || 'other',
+      name: name,
+      price: price,
+      oldPrice: r.oldPrice ? Number(r.oldPrice) : null,
+      desc: r.desc || null,
+      sizes: sizesList.length ? sizesList : ['Standard'],
+      sizeLabel: 'Size',
+      colors: (r.colors||'').split(';').map(s=>s.trim()).filter(Boolean),
+      videoUrl: r.videoUrl || null,
+      stockStatus: (String(r.stockStatus).toLowerCase()==='out') ? 'out' : 'in',
+      stockQty: r.stockQty ? Math.max(0, parseInt(r.stockQty,10)||0) : null,
+      hidden: (String(r.hidden).toLowerCase()==='yes'),
+      deliveryCharge: r.deliveryCharge ? Number(r.deliveryCharge) : DELIVERY_CHARGE,
+      flashSale: (String(r.flashSale).toLowerCase()==='yes'),
+      details: [],
+      note: null,
+      productCode: null,
+      images: images,
+      badge: (String(r.flashSale).toLowerCase()==='yes') ? 'Flash Sale' : 'New',
+      addedByAdmin: true
+    };
+    try{
+      const saved = await saveCustomProduct(product);
+      ALL_PRODUCTS = ALL_PRODUCTS.filter(p=>p.id !== saved.id).concat([saved]);
+      successCount++;
+    }catch(e){
+      failCount++;
+      errors.push('Row '+(i+2)+' ('+name+'): save nahi ho saka.');
+    }
+  }
+
+  buildCategories();
+  renderProducts();
+  renderAdminProductList();
+
+  let html = '<p style="font-weight:700;">'+successCount+' products add ho gaye'+(failCount?', '+failCount+' fail hue':'')+'.</p>';
+  if(errors.length){
+    html += '<ul style="color:#c0392b;font-size:13px;margin-top:6px;padding-left:18px;">'+errors.slice(0,10).map(e=>'<li>'+escapeHtml(e)+'</li>').join('')+'</ul>';
+    if(errors.length>10) html += '<p style="color:#c0392b;font-size:13px;">...aur '+(errors.length-10)+' errors.</p>';
+  }
+  resultEl.innerHTML = html;
+  fileInput.value = '';
+  if(successCount) toast(successCount+' products upload ho gaye');
+}
+
+/* ---------- analytics ---------- */
+function trackEvent(type, productId){
+  if(typeof firebase === 'undefined' || !firebase.firestore) return;
+  try{
+    const updates = { lastUpdated: firebase.firestore.FieldValue.serverTimestamp() };
+    if(type === 'page_view'){
+      updates.totalPageViews = firebase.firestore.FieldValue.increment(1);
+    } else if(type === 'product_view' && productId){
+      updates.totalProductViews = firebase.firestore.FieldValue.increment(1);
+      updates['productViews.'+productId] = firebase.firestore.FieldValue.increment(1);
+    } else if(type === 'add_to_cart' && productId){
+      updates.totalAddToCart = firebase.firestore.FieldValue.increment(1);
+      updates['productAddToCart.'+productId] = firebase.firestore.FieldValue.increment(1);
+    } else { return; }
+    firebase.firestore().collection('analytics').doc('summary').set(updates, {merge:true});
+  }catch(e){ /* analytics kabhi bhi site ko break nahi karni chahiye */ }
+}
+
+function statCard(label, value){
+  return '<div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:14px;text-align:center;">'+
+    '<div style="font-size:22px;font-weight:800;">'+value+'</div>'+
+    '<div style="font-size:12px;color:var(--muted,#667);margin-top:2px;">'+label+'</div>'+
+  '</div>';
+}
+
+async function loadAdminAnalytics(){
+  const el = document.getElementById('adminAnalyticsContent');
+  if(typeof firebase === 'undefined' || !firebase.firestore){
+    el.innerHTML = '<p style="color:var(--muted);">Firestore setup nahi hai.</p>';
+    return;
+  }
+  el.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+  try{
+    const summaryPromise = firebase.firestore().collection('analytics').doc('summary').get();
+    const ordersPromise = firebase.firestore().collection('orders').get();
+    const [summarySnap, ordersSnap] = await Promise.all([summaryPromise, ordersPromise]);
+    const summary = summarySnap.exists ? (summarySnap.data()||{}) : {};
+    let totalOrders = 0, totalRevenue = 0;
+    ordersSnap.forEach(function(doc){ totalOrders++; totalRevenue += Number(doc.data().totalAmount || 0); });
+
+    const productViews = summary.productViews || {};
+    const productCarts = summary.productAddToCart || {};
+    function nameOf(id){ const p = ALL_PRODUCTS.find(x=>x.id===id); return p ? p.name : id; }
+
+    const topViews = Object.entries(productViews).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+    const topCarts = Object.entries(productCarts).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+
+    el.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">'+
+        statCard('Total Visits', summary.totalPageViews||0)+
+        statCard('Product Views', summary.totalProductViews||0)+
+        statCard('Add to Cart', summary.totalAddToCart||0)+
+        statCard('Total Orders', totalOrders)+
+      '</div>'+
+      '<div style="font-weight:700;margin-bottom:16px;">Total Revenue: '+money(totalRevenue)+'</div>'+
+      '<div style="margin-bottom:16px;"><b>Sab se zyada dekhe gaye products:</b>'+
+        (topViews.length ? '<ol style="margin:8px 0 0;padding-left:20px;">'+topViews.map(function(e){return '<li>'+escapeHtml(nameOf(e[0]))+' — '+e[1]+' views</li>';}).join('')+'</ol>' : '<p style="color:var(--muted);margin:6px 0 0;">Abhi data nahi hai.</p>')+
+      '</div>'+
+      '<div><b>Sab se zyada cart mein dale gaye products:</b>'+
+        (topCarts.length ? '<ol style="margin:8px 0 0;padding-left:20px;">'+topCarts.map(function(e){return '<li>'+escapeHtml(nameOf(e[0]))+' — '+e[1]+' baar</li>';}).join('')+'</ol>' : '<p style="color:var(--muted);margin:6px 0 0;">Abhi data nahi hai.</p>')+
+      '</div>';
+  }catch(e){
+    el.innerHTML = '<p style="color:var(--muted);">Analytics load nahi ho saka.</p>';
+  }
+}
+
 loadCart();
 updateCartUI();
 loadProducts();
 watchCustomProducts();
+trackEvent('page_view');

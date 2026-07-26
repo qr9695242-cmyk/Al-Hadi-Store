@@ -1,5 +1,44 @@
 # Al Hadi Store
 
+## Phase 3 Progress: CSV Bulk Upload + Analytics
+
+- **CSV Bulk Upload**: Admin Panel → "Bulk Upload" tab. Pehle "Sample CSV
+  Download Karein" se format dekh lein, phir apni products list usi
+  format mein CSV file mein bana kar upload kar dein — ek sath saare
+  products add ho jayenge. Har product ki image(s) ka link (URL) dena
+  zaroori hai; ek se zyada links ho to unke darmiyan `;` (semicolon)
+  lagayein.
+- **Analytics**: Admin Panel → "Analytics" tab — total site visits,
+  product views, add-to-cart count, total orders aur revenue, aur sab se
+  zyada dekhe/cart mein dale gaye products ki list. Ye Firestore ke
+  `analytics/summary` document mein counters ke tor par save hota hai.
+  `FIRESTORE_RULES.txt` mein iske liye naya rule shamil kar diya gaya
+  hai — Firebase Console → Firestore Database → Rules mein updated file
+  paste kar ke "Publish" dabana na bhoolein.
+- **Cloudinary image migration**: Abhi baaqi hai — iske liye Cloudinary
+  (cloudinary.com) par free account bana kar Cloud Name, API Key, aur
+  API Secret dena hoga.
+
+## Phase 2 Update: File Size Optimization
+
+Pehle `js/products-data.js` mein har product ki tasveer seedha base64 text
+ke tor par likhi hui thi — is wajah se ye file akele 1.6MB ki ho gayi thi,
+aur `index.html` bhi 568KB tak pohnch gaya tha (usme bhi logo base64 mein
+tha). Is wajah se site load hone mein time lagta tha, kyunki poori file ek
+sath download honi parti thi.
+
+Ab saari tasveerein alag chhoti files ke tor par `assets/products/` aur
+`assets/icons/` mein rakhi gayi hain, aur code sirf unka path use karta
+hai:
+
+- `index.html`: 568KB → 36KB
+- `js/products-data.js`: 1.6MB → 16KB
+- Tasveerein ab browser cache kar sakta hai aur zaroorat ke mutabiq
+  parallel mein load hoti hain — site pehle se kaafi tez khulegi.
+
+Koi functionality nahi badli — admin panel, cart, orders, likes, sab
+pehle jaisa hi kaam karega. Ye sirf backend/file-structure ki behtari hai.
+
 ## Folder Structure
 - index.html            -> Main HTML file (Firebase SDK + config linked)
 - css/style.css          -> All page styling
