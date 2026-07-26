@@ -436,7 +436,8 @@ function selPay(radio){
   radio.closest('.pay-opt').classList.add('sel');
 }
 
-/* ========== MODIFIED: Order Form with Google Sheets ========== */
+/* ========== MODIFIED: Order Form with Google Sheets + Firestore order tracking ========== */
+let LAST_ORDER_ID = null;
 document.getElementById('orderForm').addEventListener('submit', function(e){
   e.preventDefault();
   const form = this;
@@ -465,6 +466,9 @@ document.getElementById('orderForm').addEventListener('submit', function(e){
   // Send to Google Sheets first (in background)
   sendOrderToGoogleSheets(orderData);
 
+  // Save order to Firestore so it can be tracked later (admin + customer)
+  saveOrderToFirestore(orderData);
+
   // Then send email via formsubmit (existing functionality)
   fetch('https://formsubmit.co/ajax/qraza2376@gmail.com',{
     method:'POST',
@@ -486,6 +490,33 @@ document.getElementById('orderForm').addEventListener('submit', function(e){
   })
   .catch(()=>{ err.classList.add('show'); btn.textContent='Place Order'; btn.disabled=false; });
 });
+
+/* ========== Order tracking: Firestore save + local "my orders" list ========== */
+function getMyOrderIds(){
+  try{ return JSON.parse(localStorage.getItem('ahs_my_orders')||'[]'); }catch(e){ return []; }
+}
+function addMyOrderId(id){
+  try{
+    const ids = getMyOrderIds();
+    if(ids.indexOf(id)===-1){ ids.unshift(id); localStorage.setItem('ahs_my_orders', JSON.stringify(ids.slice(0,50))); }
+  }catch(e){}
+}
+function saveOrderToFirestore(orderData){
+  if(typeof firebase === 'undefined' || !firebase.firestore){ return; }
+  const record = Object.assign({}, orderData, {
+    status: 'pending',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    uid: (currentUser && currentUser.uid) ? currentUser.uid : null
+  });
+  firebase.firestore().collection('orders').add(record)
+    .then(function(docRef){
+      LAST_ORDER_ID = docRef.id;
+      addMyOrderId(docRef.id);
+    })
+    .catch(function(error){
+      console.warn('⚠️ Order could not be saved for tracking (non-blocking):', error);
+    });
+}
 
 /* ========== Google Sheets Integration Function ========== */
 function sendOrderToGoogleSheets(orderData) {
@@ -582,7 +613,7 @@ function toast(msg){
 
 /* ---------- misc ---------- */
 function scrollTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
 document.getElementById('year').textContent = new Date().getFullYear();
 
 /* ---------- account (Firebase Auth) + liked products ---------- */
@@ -823,10 +854,15 @@ function adminLogout(){
 
 function openAdminPanel(){
   renderAdminProductList();
+  switchAdminTab('products');
   document.getElementById('adminPanelModal').classList.add('open');
   document.body.style.overflow='hidden';
 }
-function closeAdminPanel(){ document.getElementById('adminPanelModal').classList.remove('open'); document.body.style.overflow=''; }
+function closeAdminPanel(){
+  document.getElementById('adminPanelModal').classList.remove('open');
+  document.body.style.overflow='';
+  if(adminOrdersUnsub){ adminOrdersUnsub(); adminOrdersUnsub = null; }
+}
 
 /* ---------- custom products (Firestore-backed, syncs on every device) ---------- */
 let CUSTOM_PRODUCTS = [];
@@ -1233,6 +1269,148 @@ function loadProducts(){
     .then(applyProducts)
     .catch(()=>{ if(window.EMBEDDED_PRODUCTS) applyProducts(window.EMBEDDED_PRODUCTS);
       else document.getElementById('productGrid').innerHTML='<div class="empty"><b>Couldn\'t load products</b>Please refresh the page.</div>'; });
+}
+
+/* ---------- customer order tracking ---------- */
+const ORDER_STATUS_LABELS = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled'
+};
+const ORDER_STATUS_COLORS = {
+  pending: '#b8860b',
+  confirmed: '#2563eb',
+  shipped: '#7c3aed',
+  delivered: '#16a34a',
+  cancelled: '#dc2626'
+};
+function orderStatusBadge(status){
+  const s = status || 'pending';
+  const label = ORDER_STATUS_LABELS[s] || s;
+  const color = ORDER_STATUS_COLORS[s] || '#667';
+  return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;color:#fff;background:'+color+';">'+escapeHtml(label)+'</span>';
+}
+function orderCardHtml(id, o){
+  const items = o.orderItems || '';
+  const total = money(o.totalAmount || 0);
+  const date = o.timestamp || '';
+  return '<div class="order-card" style="border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:14px;margin-bottom:10px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">'+
+      '<b style="font-size:13px;color:#667;">Order #'+escapeHtml(id.slice(-6).toUpperCase())+'</b>'+
+      orderStatusBadge(o.status)+
+    '</div>'+
+    '<div style="font-size:13px;color:#667;margin-bottom:4px;">'+escapeHtml(date)+'</div>'+
+    '<div style="font-size:14px;margin-bottom:6px;">'+escapeHtml(items)+'</div>'+
+    '<div style="font-weight:700;">'+total+'</div>'+
+  '</div>';
+}
+function openOrdersModal(){
+  document.getElementById('ordersModal').classList.add('open');
+  document.body.style.overflow='hidden';
+  renderMyOrders();
+}
+function closeOrdersModal(){
+  document.getElementById('ordersModal').classList.remove('open');
+  document.body.style.overflow='';
+}
+function renderMyOrders(){
+  const list = document.getElementById('myOrdersList');
+  const ids = getMyOrderIds();
+  if(!ids.length){
+    list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Abhi tak koi order is device se track nahi hua. Neechay phone number se dhoond sakte hain.</p>';
+    return;
+  }
+  if(typeof firebase === 'undefined' || !firebase.firestore){
+    list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Order tracking abhi available nahi hai.</p>';
+    return;
+  }
+  list.innerHTML = '<p style="color:var(--muted);font-size:13px;">Loading…</p>';
+  const db = firebase.firestore();
+  Promise.all(ids.map(id => db.collection('orders').doc(id).get().catch(()=>null)))
+    .then(function(docs){
+      const cards = [];
+      docs.forEach(function(d, i){
+        if(d && d.exists) cards.push(orderCardHtml(ids[i], d.data()));
+      });
+      list.innerHTML = cards.length ? cards.join('') : '<p style="color:var(--muted);font-size:14px;">Koi order nahi mila.</p>';
+    })
+    .catch(function(){
+      list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Orders load nahi ho sakay — internet check karein.</p>';
+    });
+}
+function trackOrdersByPhone(){
+  const phone = document.getElementById('trackPhoneInput').value.trim();
+  const list = document.getElementById('phoneOrdersList');
+  if(!phone){ toast('Phone number likhein'); return; }
+  if(typeof firebase === 'undefined' || !firebase.firestore){
+    list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Order tracking abhi available nahi hai.</p>';
+    return;
+  }
+  list.innerHTML = '<p style="color:var(--muted);font-size:13px;">Dhoond rahe hain…</p>';
+  firebase.firestore().collection('orders').where('phone', '==', phone).get()
+    .then(function(snap){
+      if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Is phone number se koi order nahi mila.</p>'; return; }
+      const cards = [];
+      snap.forEach(function(doc){ cards.push(orderCardHtml(doc.id, doc.data())); addMyOrderId(doc.id); });
+      list.innerHTML = cards.join('');
+    })
+    .catch(function(){
+      list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Search fail ho gayi — internet check karein.</p>';
+    });
+}
+
+/* ---------- admin: orders dashboard ---------- */
+let adminOrdersUnsub = null;
+function switchAdminTab(tab){
+  document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));
+  const btn = document.querySelector('.admin-tab[data-tab="'+tab+'"]');
+  if(btn) btn.classList.add('active');
+  document.getElementById('adminPane-products').style.display = (tab==='products') ? 'block' : 'none';
+  document.getElementById('adminPane-orders').style.display = (tab==='orders') ? 'block' : 'none';
+  if(tab==='orders') loadAdminOrders();
+}
+function loadAdminOrders(){
+  const list = document.getElementById('adminOrdersList');
+  if(typeof firebase === 'undefined' || !firebase.firestore){
+    list.innerHTML = '<p style="color:var(--muted);">Firestore setup nahi hai.</p>';
+    return;
+  }
+  list.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+  if(adminOrdersUnsub) adminOrdersUnsub();
+  adminOrdersUnsub = firebase.firestore().collection('orders').orderBy('createdAt', 'desc').limit(200)
+    .onSnapshot(function(snap){
+      if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);">Abhi koi order nahi aya.</p>'; return; }
+      const rows = [];
+      snap.forEach(function(doc){ rows.push(adminOrderRowHtml(doc.id, doc.data())); });
+      list.innerHTML = rows.join('');
+    }, function(){
+      list.innerHTML = '<p style="color:var(--muted);">Orders load nahi ho sakay.</p>';
+    });
+}
+function adminOrderRowHtml(id, o){
+  const statusOptions = Object.keys(ORDER_STATUS_LABELS).map(function(s){
+    return '<option value="'+s+'"'+((o.status||'pending')===s?' selected':'')+'>'+ORDER_STATUS_LABELS[s]+'</option>';
+  }).join('');
+  return '<div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:14px;margin-bottom:10px;">'+
+    '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">'+
+      '<div>'+
+        '<b>'+escapeHtml(o.fullName||'')+'</b> · '+escapeHtml(o.phone||'')+'<br>'+
+        '<span style="color:#667;font-size:13px;">'+escapeHtml(o.timestamp||'')+' · '+escapeHtml(o.paymentMethod||'')+'</span>'+
+      '</div>'+
+      '<select onchange="updateOrderStatus(\''+id+'\', this.value)" style="height:34px;border-radius:8px;">'+statusOptions+'</select>'+
+    '</div>'+
+    '<div style="margin-top:8px;font-size:14px;">'+escapeHtml(o.orderItems||'')+'</div>'+
+    '<div style="margin-top:4px;color:#667;font-size:13px;">'+escapeHtml(o.address||'')+'</div>'+
+    '<div style="margin-top:6px;font-weight:700;">'+money(o.totalAmount||0)+'</div>'+
+  '</div>';
+}
+function updateOrderStatus(id, status){
+  if(typeof firebase === 'undefined' || !firebase.firestore) return;
+  firebase.firestore().collection('orders').doc(id).update({status: status})
+    .then(function(){ toast('Order status update ho gaya'); })
+    .catch(function(){ toast('Status update fail ho gaya'); });
 }
 
 loadCart();

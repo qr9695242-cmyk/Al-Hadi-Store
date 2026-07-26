@@ -87,6 +87,33 @@ Aur Firebase Console mein "Authentication" section kholkar
 → Sign-in method → Email/Password → Enable → Save). Iske baghair
 sign up/login kaam nahi karega.
 
+## Orders Dashboard (Admin) + Order Tracking (Customer)
+
+Ab jab customer checkout complete karta hai, order Firestore ke `orders`
+collection mein bhi save hota hai (email aur Google Sheets ke sath-sath,
+jo pehle se kaam kar rahe thay).
+
+- **Admin ke liye**: Admin Panel kholein → upar "Orders" tab par tap karein.
+  Har order ka naam, phone, address, items, total aur ek status dropdown
+  (Pending / Confirmed / Shipped / Delivered / Cancelled) dikhta hai —
+  dropdown change karte hi status turant save ho jata hai aur customer
+  bhi apni taraf status update dekh sakta hai.
+- **Customer ke liye**: Account icon → "Mera Order Track Karein" par tap
+  karein. Jis device se order place kiya usi par order list khud dikh
+  jati hai; kisi doosray device se dekhna ho to apna phone number daal
+  kar "Dhoondain" dabayein.
+
+Isay kaam karne ke liye Firestore Rules mein `orders` collection ka block
+add karna zaroori hai — `FIRESTORE_RULES.txt` file mein updated rules
+already maujood hain, Firebase Console → Firestore Database → Rules mein
+paste karke "Publish" dabayein.
+
+> Security note: filhaal `orders` collection bhi products ki tarah open
+> hai (`allow read, write: if true`) — admin panel sirf app ke andar
+> password se protected hai, Firebase Auth session nahi banata. Zyada
+> security chahiye ho to Firebase Authentication admin login ke sath
+> jorna hoga; agar ye chahiye ho to bata dein.
+
 ## Product share (photo ke sath) aur website link preview
 
 - **"Share this product" button** ab (jahan phone/browser support kare, jaise

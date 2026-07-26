@@ -339,17 +339,40 @@
         </div>
 
         <p style="font-size:.78rem;color:var(--muted);margin-top:16px;line-height:1.6;">Account banane se aap products ko heart <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;"><path d="M12 21s-7.5-4.6-10-9.3C.5 8 2 4.5 5.7 4c2.2-.3 4 .9 5.3 2.8C12.3 4.9 14.1 3.7 16.3 4c3.7.5 5.2 4 3.7 7.7C19.5 16.4 12 21 12 21z"/></svg> icon se pasand (like) kar ke save kar sakte hain — jo har device par login karne par nazar aayenge.</p>
+        <button type="button" class="btn btn-ghost btn-block" style="margin-top:14px;" onclick="closeAccount();openOrdersModal();">Mera Order Track Karein</button>
       </div>
 
       <!-- logged-in: profile + liked products -->
       <div id="accLoggedIn" style="display:none;">
         <span class="kicker">My Account</span>
         <h2 style="margin:4px 0 4px;word-break:break-all;" id="accEmail"></h2>
+        <button type="button" class="btn btn-ghost btn-block" style="margin:6px 0 16px;" onclick="closeAccount();openOrdersModal();">Mera Order Track Karein</button>
         <p style="color:var(--muted);font-size:.85rem;margin:0 0 16px;">Aapke pasand kiye hue (liked) products:</p>
         <div class="like-grid" id="likedGrid"></div>
         <button type="button" class="btn btn-navy" style="margin-top:20px;" onclick="logoutUser()">Log Out</button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ============ ORDERS TRACKING MODAL (customer) ============ -->
+<div class="modal" id="ordersModal">
+  <div class="modal-bg" onclick="closeOrdersModal()"></div>
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeOrdersModal()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="modal-pad">
+      <span class="kicker">Order Tracking</span>
+      <h2 style="margin:4px 0 16px;">Mere Orders</h2>
+      <div id="myOrdersList"></div>
+
+      <hr style="margin:22px 0;border:none;border-top:1px solid rgba(0,0,0,.08);">
+      <h3 style="margin:0 0 10px;">Phone Number se Dhoondain</h3>
+      <div class="frow" style="display:flex;gap:8px;">
+        <input type="tel" id="trackPhoneInput" placeholder="03xxxxxxxxx" style="flex:1;">
+        <button type="button" class="btn btn-gold" onclick="trackOrdersByPhone()">Dhoondain</button>
+      </div>
+      <div id="phoneOrdersList" style="margin-top:14px;"></div>
     </div>
   </div>
 </div>
@@ -384,7 +407,19 @@
     <button class="modal-close" onclick="closeAdminPanel()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <div class="modal-pad">
       <span class="kicker">Admin Panel</span>
-      <h2 style="margin:4px 0 4px;">Product Manage Karein</h2>
+      <h2 style="margin:4px 0 12px;">Admin Panel</h2>
+
+      <div style="display:flex;gap:8px;margin-bottom:18px;">
+        <button type="button" class="admin-tab active" data-tab="products" onclick="switchAdminTab('products')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Products</button>
+        <button type="button" class="admin-tab" data-tab="orders" onclick="switchAdminTab('orders')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Orders</button>
+      </div>
+
+      <div id="adminPane-orders" style="display:none;">
+        <p style="margin:0 0 14px;color:var(--muted,#667);">Sab orders yahan dikhte hain — status update karne ke liye dropdown use karein.</p>
+        <div id="adminOrdersList"></div>
+      </div>
+
+      <div id="adminPane-products">
       <p style="margin:0 0 18px;color:var(--muted,#667);">Naya product add karein — color aur size options add karna na bhoolein.</p>
 
       <form id="addProductForm" onsubmit="return submitAddProduct(event)">
@@ -530,6 +565,7 @@
 
       <h3 style="margin:0 0 12px;">Mojooda Products</h3>
       <div id="adminProductList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
 
       <button type="button" class="btn btn-navy" style="margin-top:20px;" onclick="adminLogout()">Log Out</button>
     </div>

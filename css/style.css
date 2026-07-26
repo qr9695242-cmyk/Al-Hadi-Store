@@ -358,3 +358,7 @@ svg{ display:block; }
 .toast.show{ opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
 .toast svg{ color:var(--gold-2); }
 @media(min-width:761px){ .toast{ bottom:28px; } }
+
+/* Admin panel tabs + order cards */
+.admin-tab.active{ background:var(--navy,#0c2340) !important; color:#fff !important; border-color:var(--navy,#0c2340) !important; }
+.order-card{ background:#fafafa; }
