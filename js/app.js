@@ -992,6 +992,33 @@ function compressImageFile(file, maxDim, quality){
   });
 }
 
+/* Uploads a single image file to Cloudinary using an unsigned upload preset.
+   The photo is resized/compressed on-device first (same helper used for the
+   old inline-storage path) purely to save upload bandwidth and Cloudinary
+   storage — Cloudinary itself has no 1MB document limit like Firestore did,
+   so this is just good practice, not a hard requirement. Returns the
+   Cloudinary-hosted secure URL to save on the product document. */
+async function uploadImageToCloudinary(file){
+  const blob = await compressImageFile(file, 1600, 0.82);
+  const form = new FormData();
+  form.append('file', blob);
+  form.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+  let res;
+  try{
+    res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`, {
+      method: 'POST',
+      body: form
+    });
+  }catch(err){
+    throw new Error('Cloudinary tak pahonch nahi payi — internet check karein.');
+  }
+  if(!res.ok){
+    throw new Error('Photo upload nahi ho saki (Cloudinary preset check karein).');
+  }
+  const data = await res.json();
+  return data.secure_url;
+}
+
 function blobToDataUrl(blob){
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -1089,8 +1116,8 @@ async function submitAddProduct(e){
     return false;
   }
 
-  if(files.length > 4){
-    errEl.textContent = 'Ek dafa mein zyada se zyada 4 photos upload karein (document size limit ki wajah se).';
+  if(files.length > 8){
+    errEl.textContent = 'Ek dafa mein zyada se zyada 8 photos upload karein.';
     errEl.classList.add('show');
     return false;
   }
@@ -1098,13 +1125,18 @@ async function submitAddProduct(e){
   const productId = editId || ('admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
 
   let uploadedImages = [];
-  try{
-    const perImageBudget = Math.floor(600000 / Math.max(files.length, 1)); // shared budget so total stays well under 1MB
-    uploadedImages = await Promise.all(files.map(f=>compressImageUnderLimit(f, perImageBudget).then(src=>({src:src, alt:name}))));
-  }catch(err){
-    errEl.textContent = (err && err.message) || 'Photo process nahi ho saki.';
-    errEl.classList.add('show');
-    return false;
+  if(files.length){
+    const submitBtn = document.getElementById('addProductForm') && document.getElementById('addProductForm').querySelector('button[type="submit"]');
+    if(submitBtn){ submitBtn.disabled = true; submitBtn.dataset.origText = submitBtn.textContent; submitBtn.textContent = 'Uploading photos...'; }
+    try{
+      uploadedImages = await Promise.all(files.map(f=>uploadImageToCloudinary(f).then(url=>({src:url, alt:name}))));
+    }catch(err){
+      errEl.textContent = (err && err.message) || 'Photo upload nahi ho saki.';
+      errEl.classList.add('show');
+      if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.origText; }
+      return false;
+    }
+    if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.origText; }
   }
 
   const urlImages = imageUrls.map(u=>({src:u, alt:name}));
