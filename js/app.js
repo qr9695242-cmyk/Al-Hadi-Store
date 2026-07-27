@@ -221,7 +221,7 @@ let CATEGORY_GROUPS = {}; // key -> { label, code }
 function renderProducts(){
   const grid = document.getElementById('productGrid');
   const info = document.getElementById('resultInfo');
-  let list = ALL_PRODUCTS.filter(p => !p.hidden);
+  let list = ALL_PRODUCTS.filter(p => !p.hidden && !p.deleted);
   if(currentFilter !== 'all') list = list.filter(p => catKey(p.category) === currentFilter);
   if(currentSearch){
     const q = currentSearch.toLowerCase();
@@ -884,7 +884,7 @@ async function toggleLike(id){
 function renderLikedGrid(){
   const wrap = document.getElementById('likedGrid');
   if(!wrap || !currentUser) return;
-  const liked = ALL_PRODUCTS.filter(p => USER_LIKES.has(p.id) && !p.hidden);
+  const liked = ALL_PRODUCTS.filter(p => USER_LIKES.has(p.id) && !p.hidden && !p.deleted);
   if(!liked.length){
     wrap.innerHTML = '<p style="grid-column:1/-1;color:var(--muted);font-size:.85rem;margin:0;">Abhi tak koi product pasand nahi kiya — har product ke heart icon ' +
       heartSvg(false) + ' par tap karke save karein.</p>';
@@ -972,6 +972,19 @@ function loadCustomProducts(){
   return CUSTOM_PRODUCTS;
 }
 
+/* Merges base (embedded, code-level) products with Firestore overrides,
+   de-duplicated by id — an override always wins over the base entry with
+   the same id. Without this, base + override both stayed in ALL_PRODUCTS
+   (plain .concat never dedupes), so a "deleted" base product's override
+   (hidden:true) sat right alongside its original, un-hidden base entry —
+   the product never actually disappeared from the admin list. */
+function mergeProducts(base, custom){
+  const byId = new Map();
+  base.forEach(p => byId.set(p.id, p));
+  custom.forEach(p => byId.set(p.id, p));
+  return Array.from(byId.values());
+}
+
 /* Real-time listener: koi bhi admin product add/edit/delete kare,
    har visitor/device par bina refresh ke turant update ho jata hai. */
 function watchCustomProducts(){
@@ -983,7 +996,7 @@ function watchCustomProducts(){
     CUSTOM_PRODUCTS = snap.docs.map(function(d){
       return Object.assign({}, d.data(), {id:d.id});
     });
-    ALL_PRODUCTS = BASE_PRODUCTS.concat(CUSTOM_PRODUCTS);
+    ALL_PRODUCTS = mergeProducts(BASE_PRODUCTS, CUSTOM_PRODUCTS);
     buildCategories();
     renderProducts();
     renderAdminProductList();
@@ -1360,12 +1373,13 @@ function renderAdminProductList(){
   const wrap = document.getElementById('adminProductList');
   const selectAll = document.getElementById('adminSelectAllProducts');
   if(selectAll) selectAll.checked = false;
-  if(!ALL_PRODUCTS.length){
+  const listable = ALL_PRODUCTS.filter(p => !p.deleted);
+  if(!listable.length){
     wrap.innerHTML = '<p style="color:#667;margin:0;">Abhi tak koi product nahi hai.</p>';
     updateBulkDeleteButton();
     return;
   }
-  wrap.innerHTML = ALL_PRODUCTS.map(p=>{
+  wrap.innerHTML = listable.map(p=>{
     const stockTxt = (p.stockQty!=null) ? ('Stock: '+p.stockQty) : (p.stockStatus==='out' ? 'Out of Stock' : 'In Stock');
     const stockColor = (p.stockQty===0 || p.stockStatus==='out') ? '#c0392b' : '#2f8f4e';
     const hiddenTxt = p.hidden ? ' · <span style="color:#c0392b;">Hidden</span>' : '';
@@ -1421,7 +1435,7 @@ async function bulkDeleteAdminProducts(){
       } else {
         const base = ALL_PRODUCTS.find(function(p){ return p.id===id; });
         if(base){
-          const updated = Object.assign({}, base, {hidden:true});
+          const updated = Object.assign({}, base, {hidden:true, deleted:true});
           const saved = await saveCustomProduct(updated);
           ALL_PRODUCTS = ALL_PRODUCTS.filter(function(x){ return x.id!==id; }).concat([saved]);
         }
@@ -1464,7 +1478,7 @@ async function deleteAdminProduct(id){
     } else {
       const base = ALL_PRODUCTS.find(p=>p.id===id);
       if(!base) return;
-      const updated = Object.assign({}, base, {hidden:true});
+      const updated = Object.assign({}, base, {hidden:true, deleted:true});
       const saved = await saveCustomProduct(updated);
       ALL_PRODUCTS = ALL_PRODUCTS.filter(x=>x.id!==id).concat([saved]);
     }
@@ -1481,7 +1495,7 @@ async function deleteAdminProduct(id){
 /* ---------- load products ---------- */
 function applyProducts(data){
   BASE_PRODUCTS = (data && data.products) || [];
-  ALL_PRODUCTS = BASE_PRODUCTS.concat(loadCustomProducts());
+  ALL_PRODUCTS = mergeProducts(BASE_PRODUCTS, loadCustomProducts());
   buildCategories();
   renderProducts();
   openProductFromURL();
