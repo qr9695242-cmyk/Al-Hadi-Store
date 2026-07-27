@@ -633,6 +633,12 @@
       <hr style="margin:26px 0;border:none;border-top:1px solid rgba(0,0,0,.08);">
 
       <h3 style="margin:0 0 12px;">Mojooda Products</h3>
+      <div id="adminBulkDeleteBar" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+          <input type="checkbox" id="adminSelectAllProducts" onchange="toggleSelectAllAdminProducts(this)" style="width:18px;height:18px;"> Sab Select Karein
+        </label>
+        <button type="button" class="btn btn-navy" id="adminBulkDeleteBtn" style="padding:6px 14px;" onclick="bulkDeleteAdminProducts()" disabled>Selected Delete Karein (0)</button>
+      </div>
       <div id="adminProductList" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
 
@@ -661,7 +667,7 @@
 
 <script src="js/products-data.js?v=4"></script>
 
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=8"></script>
 
 <!-- PWA: register service worker for offline shell + Add-to-Home-Screen -->
 <script>

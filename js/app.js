@@ -1358,8 +1358,11 @@ function editAdminProduct(id){
 
 function renderAdminProductList(){
   const wrap = document.getElementById('adminProductList');
+  const selectAll = document.getElementById('adminSelectAllProducts');
+  if(selectAll) selectAll.checked = false;
   if(!ALL_PRODUCTS.length){
     wrap.innerHTML = '<p style="color:#667;margin:0;">Abhi tak koi product nahi hai.</p>';
+    updateBulkDeleteButton();
     return;
   }
   wrap.innerHTML = ALL_PRODUCTS.map(p=>{
@@ -1376,9 +1379,62 @@ function renderAdminProductList(){
         '<button type="button" class="btn btn-ghost" style="padding:6px 12px;" onclick="editAdminProduct(\''+p.id+'\')">Edit Karein</button>'+
         '<button type="button" class="btn btn-ghost" style="padding:6px 12px;" onclick="toggleAdminVisibility(\''+p.id+'\')">'+(p.hidden?'Show Karein':'Hide Karein')+'</button>'+
         '<button type="button" class="btn btn-navy" style="padding:6px 12px;" onclick="deleteAdminProduct(\''+p.id+'\')">Hatayein</button>'+
+        '<label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#667;cursor:pointer;">'+
+          '<input type="checkbox" class="admin-plist-check" value="'+p.id+'" onchange="updateBulkDeleteButton()" style="width:18px;height:18px;">Select'+
+        '</label>'+
       '</div>'+
     '</div>';
   }).join('');
+  updateBulkDeleteButton();
+}
+
+function updateBulkDeleteButton(){
+  const checks = document.querySelectorAll('.admin-plist-check:checked');
+  const btn = document.getElementById('adminBulkDeleteBtn');
+  if(!btn) return;
+  btn.textContent = 'Selected Delete Karein (' + checks.length + ')';
+  btn.disabled = checks.length === 0;
+  const all = document.querySelectorAll('.admin-plist-check');
+  const selectAll = document.getElementById('adminSelectAllProducts');
+  if(selectAll) selectAll.checked = all.length > 0 && checks.length === all.length;
+}
+
+function toggleSelectAllAdminProducts(cb){
+  document.querySelectorAll('.admin-plist-check').forEach(function(c){ c.checked = cb.checked; });
+  updateBulkDeleteButton();
+}
+
+async function bulkDeleteAdminProducts(){
+  const checks = Array.from(document.querySelectorAll('.admin-plist-check:checked'));
+  if(!checks.length) return;
+  const ids = checks.map(function(c){ return c.value; });
+  if(!confirm(ids.length + ' products delete karne hain — pakka?')) return;
+  const btn = document.getElementById('adminBulkDeleteBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Delete ho raha hai...'; }
+  let successCount = 0, failCount = 0;
+  for(const id of ids){
+    try{
+      const wasCustomOnly = String(id).startsWith('admin_');
+      if(wasCustomOnly){
+        await deleteCustomProduct(id);
+        ALL_PRODUCTS = ALL_PRODUCTS.filter(function(p){ return p.id !== id; });
+      } else {
+        const base = ALL_PRODUCTS.find(function(p){ return p.id===id; });
+        if(base){
+          const updated = Object.assign({}, base, {hidden:true});
+          const saved = await saveCustomProduct(updated);
+          ALL_PRODUCTS = ALL_PRODUCTS.filter(function(x){ return x.id!==id; }).concat([saved]);
+        }
+      }
+      successCount++;
+    }catch(err){
+      failCount++;
+    }
+  }
+  buildCategories();
+  renderProducts();
+  renderAdminProductList();
+  toast(successCount + ' products hata diye gaye' + (failCount ? ', ' + failCount + ' fail hue' : ''));
 }
 
 async function toggleAdminVisibility(id){
