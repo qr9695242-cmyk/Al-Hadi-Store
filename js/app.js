@@ -1146,7 +1146,12 @@ async function uploadImageToCloudinary(file){
     throw new Error('Cloudinary tak pahonch nahi payi — internet check karein.');
   }
   if(!res.ok){
-    throw new Error('Photo upload nahi ho saki (Cloudinary preset check karein).');
+    let detail = '';
+    try{
+      const errBody = await res.json();
+      detail = (errBody && errBody.error && errBody.error.message) || '';
+    }catch(e){ /* response wasn't JSON, ignore */ }
+    throw new Error('Photo upload nahi ho saki' + (detail ? ' — ' + detail : ' (Cloudinary preset check karein).'));
   }
   const data = await res.json();
   return data.secure_url;

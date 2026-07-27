@@ -4,6 +4,6 @@
    An unsigned preset lets the browser upload directly to Cloudinary without
    needing a backend or exposing secret credentials. */
 const CLOUDINARY_CONFIG = {
-  cloudName: 'lvnat6ugq',
+  cloudName: 'hvna6ugq',
   uploadPreset: 'alhadi_unsigned' // create this preset in Cloudinary dashboard (Settings > Upload > Upload presets > Add upload preset > Signing Mode: Unsigned)
 };
