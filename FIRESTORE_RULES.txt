@@ -1,38 +1,51 @@
 // جاؤ Firebase Console > Firestore Database > Rules اور یہ rules پیسٹ کر کے Publish کریں:
+//
+// PEHLE, YE ZAROORI HAI (warna neeche wale rules kaam nahi karenge):
+// 1. Firebase Console > Authentication > Sign-in method > "Email/Password" ko Enable karein.
+// 2. Firebase Console > Authentication > Users > "Add user" se ek account banayein
+//    apne admin email (jo js/app.js mein ADMIN_EMAIL hai) aur password ke sath.
+// Is ke baghair customer signup bhi fail hoga (auth/configuration-not-found error)
+// aur admin login bhi kaam nahi karega.
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Admin products collection — admin panel ka login sirf app ke andar
-    // (username/password) check hota hai, real Firebase Auth session nahi
-    // banata, is liye "if false" hamesha har save ko block kar deta tha.
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if true;
+    function isAdmin() {
+      // ADMIN_EMAIL yahan bhi wahi hona chahiye jo js/app.js mein hai.
+      return request.auth != null && request.auth.token.email == 'qr9695242@gmail.com';
     }
 
-    // User liked products — yeh Firebase Auth (email/password) use karta hai
+    // Products — sab visitors read kar sakte hain (store browse karne ke
+    // liye zaroori hai), lekin ab sirf admin account hi likh/edit/delete
+    // kar sakta hai. Pehle "write: if true" tha — koi bhi browser console
+    // se seedha Firestore mein product add/edit/delete kar sakta tha.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User liked products — Firebase Auth (email/password) use karta hai,
+    // har user sirf apna data padh/likh sakta hai.
     match /users/{userId} {
       allow read: if request.auth.uid == userId;
       allow write: if request.auth.uid == userId;
     }
 
-    // Orders — customer checkout par order create karta hai, admin panel
-    // (jo abhi sirf app ke andar password se protected hai, Firebase Auth
-    // se nahi) status update karta hai. "if true" jaisa hi security level
-    // jaisa products collection ka hai — baad mein Firebase Auth admin
-    // login ke sath aur secure kiya ja sakta hai.
+    // Orders — customer checkout par order create kar sakta hai (create
+    // rehne diya hai "if true" taake bina login order de sakein), lekin
+    // status update/delete ab sirf admin kar sakta hai.
     match /orders/{orderId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if true;   // TODO: baad mein admin-only banayein
+      allow update, delete: if isAdmin();
     }
 
     // Analytics summary (site visits, product views, add-to-cart counts) —
-    // ek hi document mein counters store hote hain, koi personal data nahi.
+    // ek hi document mein counters store hote hain, koi personal data nahi,
+    // lekin sirf admin panel hi inhe likhta hai.
     match /analytics/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
   }
 }

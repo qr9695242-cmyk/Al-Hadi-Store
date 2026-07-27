@@ -437,7 +437,7 @@
       <h2 style="margin:4px 0 16px;">Admin Login</h2>
       <form id="adminLoginForm" onsubmit="return submitAdminLogin(event)">
         <div class="frow">
-          <label for="adminUser">Username</label>
+          <label for="adminUser">Admin Email</label>
           <input type="text" id="adminUser" autocomplete="username" required>
         </div>
         <div class="frow">
@@ -446,6 +446,8 @@
         </div>
         <div class="form-error" id="adminLoginError">Invalid username or password.</div>
         <button type="submit" class="btn btn-navy btn-block btn-lg" style="margin-top:6px;">Log In</button>
+        <button type="button" onclick="adminForgotPassword()" style="background:none;border:none;color:#667;text-decoration:underline;font-size:13px;margin-top:10px;cursor:pointer;padding:0;">Password bhool gaye?</button>
+        <div class="form-error" id="adminForgotMsg" style="display:none;color:#2f8f4e;"></div>
       </form>
     </div>
   </div>

@@ -909,9 +909,21 @@ if(typeof firebase !== 'undefined' && firebase.auth){
   });
 }
 
-/* ---------- admin ---------- */
-const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'alhadi2026';
+/* ---------- admin ----------
+   SECURITY FIX: admin login used to be a hardcoded username/password
+   compared directly in this file (ADMIN_USER/ADMIN_PASS) — anyone who
+   viewed the page source could read the password. Firestore rules also
+   allowed "write: if true" on products/orders because there was no real
+   Firebase Auth session to check against, so literally anyone could add,
+   edit, or delete products straight from the browser console, without
+   ever touching the admin panel.
+   Fix: admin login now goes through real Firebase Authentication
+   (the same sign-in used for customer accounts). Firestore rules check
+   request.auth.token.email against ADMIN_EMAIL below — see FIRESTORE_RULES.txt.
+   This ONLY works once you (1) enable Email/Password sign-in in Firebase
+   Console > Authentication > Sign-in method, and (2) create one Firebase
+   Auth user with this exact email as your admin account. */
+const ADMIN_EMAIL = 'qr9695242@gmail.com';
 
 let adminSessionMemory = false; // in-memory fallback for browsers (e.g. WhatsApp's in-app browser) that block sessionStorage
 function isAdminLoggedIn(){
@@ -933,21 +945,64 @@ function submitAdminLogin(e){
   e.preventDefault();
   const u = document.getElementById('adminUser').value.trim();
   const p = document.getElementById('adminPass').value;
-  if(u === ADMIN_USER && p === ADMIN_PASS){
-    adminSessionMemory = true;
-    try{ sessionStorage.setItem('ahs_admin','1'); }catch(e){}
-    closeAdminLogin();
-    openAdminPanel();
-    toast('Welcome, admin!');
-  } else {
-    document.getElementById('adminLoginError').classList.add('show');
+  const errEl = document.getElementById('adminLoginError');
+  errEl.classList.remove('show');
+  if(typeof firebase === 'undefined' || !firebase.auth){
+    errEl.textContent = 'Admin login abhi kaam nahi kar raha — internet check karein.';
+    errEl.classList.add('show');
+    return false;
   }
+  // Username field still shown for familiarity, but the real check is the
+  // Firebase Auth email+password sign-in below — only ADMIN_EMAIL's account
+  // will ever be allowed to write products/orders per the Firestore rules.
+  const email = (u.includes('@')) ? u : ADMIN_EMAIL;
+  firebase.auth().signInWithEmailAndPassword(email, p)
+    .then(function(cred){
+      if(cred.user.email !== ADMIN_EMAIL){
+        firebase.auth().signOut();
+        errEl.textContent = 'Ye account admin nahi hai.';
+        errEl.classList.add('show');
+        return;
+      }
+      adminSessionMemory = true;
+      try{ sessionStorage.setItem('ahs_admin','1'); }catch(e){}
+      closeAdminLogin();
+      openAdminPanel();
+      toast('Welcome, admin!');
+    })
+    .catch(function(error){
+      errEl.textContent = friendlyAuthError(error);
+      errEl.classList.add('show');
+    });
   return false;
+}
+
+function adminForgotPassword(){
+  const msgEl = document.getElementById('adminForgotMsg');
+  const errEl = document.getElementById('adminLoginError');
+  errEl.classList.remove('show');
+  if(typeof firebase === 'undefined' || !firebase.auth){
+    errEl.textContent = 'Abhi kaam nahi kar raha — internet check karein.';
+    errEl.classList.add('show');
+    return;
+  }
+  // Sends a real reset link to ADMIN_EMAIL's Gmail inbox via Firebase —
+  // no password is ever shown, stored, or emailed in plain text.
+  firebase.auth().sendPasswordResetEmail(ADMIN_EMAIL)
+    .then(function(){
+      msgEl.textContent = 'Reset link "' + ADMIN_EMAIL + '" par bhej diya gaya hai — apna Gmail check karein.';
+      msgEl.style.display = 'block';
+    })
+    .catch(function(error){
+      errEl.textContent = friendlyAuthError(error);
+      errEl.classList.add('show');
+    });
 }
 
 function adminLogout(){
   adminSessionMemory = false;
   try{ sessionStorage.removeItem('ahs_admin'); }catch(e){}
+  if(typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut();
   closeAdminPanel();
   toast('Logged out');
 }
