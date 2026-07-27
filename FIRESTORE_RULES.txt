@@ -1,0 +1,38 @@
+// جاؤ Firebase Console > Firestore Database > Rules اور یہ rules پیسٹ کر کے Publish کریں:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admin products collection — admin panel ka login sirf app ke andar
+    // (username/password) check hota hai, real Firebase Auth session nahi
+    // banata, is liye "if false" hamesha har save ko block kar deta tha.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // User liked products — yeh Firebase Auth (email/password) use karta hai
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId;
+    }
+
+    // Orders — customer checkout par order create karta hai, admin panel
+    // (jo abhi sirf app ke andar password se protected hai, Firebase Auth
+    // se nahi) status update karta hai. "if true" jaisa hi security level
+    // jaisa products collection ka hai — baad mein Firebase Auth admin
+    // login ke sath aur secure kiya ja sakta hai.
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;   // TODO: baad mein admin-only banayein
+    }
+
+    // Analytics summary (site visits, product views, add-to-cart counts) —
+    // ek hi document mein counters store hote hain, koi personal data nahi.
+    match /analytics/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
