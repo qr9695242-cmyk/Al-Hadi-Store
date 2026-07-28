@@ -12,7 +12,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
       // ADMIN_EMAIL yahan bhi wahi hona chahiye jo js/app.js mein hai.
-      return request.auth != null && request.auth.token.email == 'qr9695242@gmail.com';
+      return request.auth != null && request.auth.token.email == 'qraza2376@gmail.com';
     }
 
     // Products — sab visitors read kar sakte hain (store browse karne ke
