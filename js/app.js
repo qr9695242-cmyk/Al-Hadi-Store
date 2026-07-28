@@ -39,6 +39,9 @@
     const msg = (reason && reason.message) ? reason.message : (reason && reason.code) ? reason.code : String(reason);
     showError('Promise Error', msg);
   });
+  window.addEventListener('securitypolicyviolation', function(e){
+    showError('CSP Blocked', (e.violatedDirective||'')+' — '+(e.blockedURI||''));
+  });
   window.showDebugError = showError;
 })();
 
