@@ -673,7 +673,11 @@
       </div>
 
       <div id="adminPane-orders" style="display:none;">
-        <p style="margin:0 0 14px;color:var(--muted,#667);">Sab orders yahan dikhte hain — status update karne ke liye dropdown use karein.</p>
+        <p style="margin:0 0 10px;color:var(--muted,#667);">Sab orders yahan dikhte hain — status update karne ke liye dropdown use karein.</p>
+        <label style="display:flex;align-items:center;gap:7px;font-size:.82rem;margin-bottom:14px;cursor:pointer;">
+          <input type="checkbox" id="showCancelledToggle" onchange="loadAdminOrders()">
+          Cancelled orders bhi dikhayein
+        </label>
         <div id="adminOrdersList"></div>
       </div>
 

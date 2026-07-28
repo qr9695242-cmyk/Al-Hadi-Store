@@ -3,6 +3,45 @@
    Al Hadi Store — marketplace front-end
    WITH GOOGLE SHEETS ORDER TRACKING ✅
    ============================================================ */
+
+/* ---------- ON-SCREEN ERROR CATCHER ----------
+   Chhupi hui JS errors (jo phone par console mein bhi nahi dikhtin)
+   ab seedha ek chhoti si red patti mein screen ke neeche dikhengi,
+   taake bina computer/console ke bhi asal masla pata chal sake. */
+(function(){
+  let box;
+  function ensureBox(){
+    if(box) return box;
+    box = document.createElement('div');
+    box.id = 'debugErrorBox';
+    box.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;z-index:99999;background:#2a0a0a;color:#ffdede;font:12px/1.5 monospace;padding:12px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.4);max-height:40vh;overflow-y:auto;display:none;';
+    const closeBtn = document.createElement('div');
+    closeBtn.textContent = '✕ Band Karein';
+    closeBtn.style.cssText = 'text-align:right;font-weight:700;cursor:pointer;margin-bottom:6px;color:#ffb3b3;';
+    closeBtn.onclick = function(){ box.style.display = 'none'; };
+    box.appendChild(closeBtn);
+    document.body.appendChild(box);
+    return box;
+  }
+  function showError(label, detail){
+    const b = ensureBox();
+    const line = document.createElement('div');
+    line.style.cssText = 'border-top:1px solid rgba(255,255,255,.15);padding-top:6px;margin-top:6px;white-space:pre-wrap;word-break:break-word;';
+    line.textContent = '⚠️ ' + label + ': ' + detail;
+    b.appendChild(line);
+    b.style.display = 'block';
+  }
+  window.addEventListener('error', function(e){
+    showError('JS Error', (e && e.message ? e.message : 'Unknown') + (e && e.filename ? (' @ ' + e.filename.split('/').pop() + ':' + e.lineno) : ''));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    const reason = e && e.reason;
+    const msg = (reason && reason.message) ? reason.message : (reason && reason.code) ? reason.code : String(reason);
+    showError('Promise Error', msg);
+  });
+  window.showDebugError = showError;
+})();
+
 const DELIVERY_CHARGE = 200;
 const CATEGORY_LABELS = {
   kapray:'Clothing', joote:'Footwear', mobile:'Mobile & Accessories',
@@ -1254,37 +1293,53 @@ function signInWithGoogle(){
   [err1,err2].forEach(function(e){ if(e) e.classList.remove('show'); });
   if(typeof firebase === 'undefined' || !firebase.auth){
     toast('Internet check karein');
+    window.showDebugError && window.showDebugError('Google Sign-In', 'Firebase SDK load nahi hua (firebase undefined)');
     return;
   }
-  const provider = new firebase.auth.GoogleAuthProvider();
-  if(isMobileDevice()){
-    // Mobile browsers (Safari/Chrome on iOS/Android) silently block popups,
-    // so we redirect to Google's login page instead and come back automatically.
-    firebase.auth().signInWithRedirect(provider);
-    return;
+  try{
+    const provider = new firebase.auth.GoogleAuthProvider();
+    if(isMobileDevice()){
+      // Mobile browsers (Safari/Chrome on iOS/Android) silently block popups,
+      // so we redirect to Google's login page instead and come back automatically.
+      toast('Google par bhej rahe hain…');
+      firebase.auth().signInWithRedirect(provider).catch(function(error){
+        window.showDebugError && window.showDebugError('Google Redirect', (error&&error.code)+': '+(error&&error.message));
+        toast(friendlyAuthError(error));
+      });
+      return;
+    }
+    firebase.auth().signInWithPopup(provider)
+      .then(function(){
+        closeAccount();
+        toast('Login ho gaye — khush aamdeed!');
+      })
+      .catch(function(error){
+        const msg = friendlyAuthError(error);
+        if(err1){ err1.textContent = msg; err1.classList.add('show'); }
+        toast(msg);
+        window.showDebugError && window.showDebugError('Google Popup', (error&&error.code)+': '+(error&&error.message));
+      });
+  }catch(error){
+    window.showDebugError && window.showDebugError('Google Sign-In (sync)', (error&&error.message)||String(error));
+    toast('Kuch masla ho gaya');
   }
-  firebase.auth().signInWithPopup(provider)
-    .then(function(){
-      closeAccount();
-      toast('Login ho gaye — khush aamdeed!');
-    })
-    .catch(function(error){
-      const msg = friendlyAuthError(error);
-      if(err1){ err1.textContent = msg; err1.classList.add('show'); }
-      toast(msg);
-    });
 }
 // Completes sign-in after returning from Google's redirect page (mobile flow)
-if(typeof firebase !== 'undefined' && firebase.auth){
-  firebase.auth().getRedirectResult().then(function(result){
-    if(result && result.user){
-      toast('Login ho gaye — khush aamdeed!');
-    }
-  }).catch(function(error){
-    if(error && error.code && error.code !== 'auth/no-auth-event'){
-      toast(friendlyAuthError(error));
-    }
-  });
+try{
+  if(typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length && firebase.auth){
+    firebase.auth().getRedirectResult().then(function(result){
+      if(result && result.user){
+        toast('Login ho gaye — khush aamdeed!');
+      }
+    }).catch(function(error){
+      if(error && error.code && error.code !== 'auth/no-auth-event'){
+        toast(friendlyAuthError(error));
+        window.showDebugError && window.showDebugError('Redirect Result', error.code+': '+error.message);
+      }
+    });
+  }
+}catch(error){
+  window.showDebugError && window.showDebugError('Redirect Result (sync)', (error&&error.message)||String(error));
 }
 
 function submitLogin(e){
@@ -2410,9 +2465,14 @@ function loadAdminOrders(){
   adminOrdersUnsub = firebase.firestore().collection('orders').orderBy('createdAt', 'desc').limit(200)
     .onSnapshot(function(snap){
       if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);">Abhi koi order nahi aya.</p>'; return; }
+      const showCancelled = document.getElementById('showCancelledToggle') && document.getElementById('showCancelledToggle').checked;
       const rows = [];
-      snap.forEach(function(doc){ rows.push(adminOrderRowHtml(doc.id, doc.data())); });
-      list.innerHTML = rows.join('');
+      snap.forEach(function(doc){
+        const data = doc.data();
+        if(!showCancelled && (data.status||'pending')==='cancelled') return;
+        rows.push(adminOrderRowHtml(doc.id, data));
+      });
+      list.innerHTML = rows.length ? rows.join('') : '<p style="color:var(--muted);">Koi (active) order nahi hai. Cancelled orders dekhne ke liye upar wala checkbox tick karein.</p>';
     }, function(err){
       let hint = '';
       if(err && err.code === 'permission-denied') hint = ' (Firestore rules mein "orders" collection ke liye read allow nahi hai — Firebase Console mein rules publish karein.)';
