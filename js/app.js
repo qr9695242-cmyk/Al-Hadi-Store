@@ -20,6 +20,7 @@ const CATEGORY_ICONS = {
 
 let ALL_PRODUCTS = [];
 let CART = [];
+let APPLIED_COUPON = null; // { code, type, value, discountAmount }
 let currentFilter = 'all';
 let currentSearch = '';
 let PD = { product:null, index:0 };
@@ -172,6 +173,7 @@ function heartSvg(filled){
 function renderProductCard(p){
   const disc = discountPct(p);
   const wished = USER_LIKES.has(p.id);
+  const compared = getCompareIds().includes(p.id);
   const outOfStock = (p.stockStatus==='out') || (p.stockQty!=null && p.stockQty<=0);
   return (
     '<article class="pcard" onclick="openProduct(\''+p.id+'\')">'+
@@ -181,6 +183,7 @@ function renderProductCard(p){
         (p.badge ? '<span class="badge-tag">'+escapeHtml(p.badge)+'</span>' : '')+
         (outOfStock ? '<span class="badge-tag" style="left:auto;right:9px;top:9px;background:#c0392b;">Out of Stock</span>' : '')+
         '<button class="wish'+(wished?' on':'')+'" onclick="event.stopPropagation();toggleLike(\''+p.id+'\')" aria-label="'+(wished?'Remove from liked products':'Save to liked products')+'">'+heartSvg(wished)+'</button>'+
+        '<button class="cmp-btn'+(compared?' on':'')+'" onclick="event.stopPropagation();toggleCompare(\''+p.id+'\')" aria-label="Compare" title="Compare"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>'+
       '</div>'+
       '<div class="pcard-body">'+
         '<h3 class="pcard-name">'+escapeHtml(p.name)+'</h3>'+
@@ -238,6 +241,55 @@ function renderProducts(){
     else if(currentFilter!=='all') info.textContent = list.length+' item'+(list.length!==1?'s':'')+' in '+((CATEGORY_GROUPS[currentFilter]&&CATEGORY_GROUPS[currentFilter].label)||catLabel(currentFilter));
     else info.textContent = 'Browse the full Al Hadi Store collection';
   }
+  renderHomeSections();
+  renderCompareBar();
+}
+
+/* ---------- homepage rows: flash sale / new arrivals / best sellers / recently viewed ---------- */
+function renderHomeSections(){
+  const live = ALL_PRODUCTS.filter(p => !p.hidden && !p.deleted);
+
+  const flash = live.filter(p => p.flashSale);
+  toggleRow('flashSaleSec','flashSaleRow', flash.slice(0,10));
+
+  const fresh = live.filter(p => p.badge==='New' && !p.flashSale).slice(0,10);
+  toggleRow('newArrivalsSec','newArrivalsRow', fresh);
+
+  renderBestSellers(live);
+  renderRecentlyViewed(live);
+}
+function toggleRow(secId, rowId, items){
+  const sec = document.getElementById(secId);
+  const row = document.getElementById(rowId);
+  if(!sec || !row) return;
+  if(!items.length){ sec.style.display='none'; return; }
+  sec.style.display='block';
+  row.innerHTML = items.map(renderProductCard).join('');
+}
+async function renderBestSellers(live){
+  try{
+    const doc = await firebase.firestore().collection('analytics').doc('summary').get();
+    const counts = (doc.exists && doc.data().productAddToCart) || {};
+    const ranked = Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(e=>e[0])
+      .map(id=>live.find(p=>p.id===id)).filter(Boolean).slice(0,10);
+    toggleRow('bestSellersSec','bestSellersRow', ranked);
+  }catch(e){ /* analytics optional — don't break homepage */ }
+}
+function getRecentlyViewed(){
+  try{ return JSON.parse(localStorage.getItem('ahs_recent')||'[]'); }catch(e){ return []; }
+}
+function trackRecentlyViewed(id){
+  try{
+    let ids = getRecentlyViewed().filter(x=>x!==id);
+    ids.unshift(id);
+    ids = ids.slice(0,12);
+    localStorage.setItem('ahs_recent', JSON.stringify(ids));
+  }catch(e){}
+}
+function renderRecentlyViewed(live){
+  const ids = getRecentlyViewed().filter(id => id !== (PD.product&&PD.product.id));
+  const items = ids.map(id=>live.find(p=>p.id===id)).filter(Boolean).slice(0,10);
+  toggleRow('recentSec','recentRow', items);
 }
 
 /* ---------- category tabs & nav ---------- */
@@ -355,7 +407,34 @@ function setFilter(cat){
 document.getElementById('searchInput').addEventListener('input', function(){
   currentSearch = this.value.trim();
   renderProducts();
+  renderSearchSuggestions(this.value.trim());
 });
+document.getElementById('searchInput').addEventListener('focus', function(){
+  renderSearchSuggestions(this.value.trim());
+});
+document.addEventListener('click', function(e){
+  const box = document.getElementById('searchSuggest');
+  const bar = document.querySelector('.searchbar');
+  if(box && bar && !bar.contains(e.target)) box.classList.remove('show');
+});
+function renderSearchSuggestions(q){
+  const box = document.getElementById('searchSuggest');
+  if(!box) return;
+  if(!q){ box.classList.remove('show'); box.innerHTML=''; return; }
+  const ql = q.toLowerCase();
+  const matches = ALL_PRODUCTS.filter(p => !p.hidden && !p.deleted && p.name.toLowerCase().includes(ql)).slice(0,6);
+  if(!matches.length){ box.innerHTML = '<div class="ss-empty">Koi match nahi mila</div>'; box.classList.add('show'); return; }
+  box.innerHTML = matches.map(p =>
+    '<div class="ss-item" onclick="pickSuggestion(\''+p.id+'\')"><img src="'+firstImg(p)+'" alt=""><div><b>'+escapeHtml(p.name)+'</b><span>'+money(p.price)+'</span></div></div>'
+  ).join('');
+  box.classList.add('show');
+}
+function pickSuggestion(id){
+  document.getElementById('searchSuggest').classList.remove('show');
+  document.getElementById('searchInput').value='';
+  currentSearch=''; renderProducts();
+  openProduct(id);
+}
 function focusResults(){ document.getElementById('shop').scrollIntoView({behavior:'smooth'}); }
 
 /* ---------- product detail modal ---------- */
@@ -363,6 +442,7 @@ function openProduct(id, fromURL){
   const p = ALL_PRODUCTS.find(x => x.id===id);
   if(!p) return;
   trackEvent('product_view', id);
+  trackRecentlyViewed(id);
   PD = { product:p, index:0, size:(p.sizes&&p.sizes.length?p.sizes[0]:null), qty:1 };
   renderDetail();
   document.getElementById('productModal').classList.add('open');
@@ -392,7 +472,8 @@ function renderDetail(){
   el.innerHTML =
     '<div class="pd-gallery">'+
       '<div class="pd-main">'+
-        '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'">'+
+        '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'" onclick="openImageZoom()" style="cursor:zoom-in;">'+
+        '<button class="pd-zoom-btn" onclick="openImageZoom()" aria-label="Zoom image"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/></svg></button>'+
         (imgs.length>1 ? '<button class="pd-nav prev" onclick="pdSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>' : '')+
         (imgs.length>1 ? '<button class="pd-nav next" onclick="pdSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>' : '')+
       '</div>'+
@@ -421,7 +502,252 @@ function renderDetail(){
         (p.productCode?'<div class="note" style="font-style:normal"><b>Product Code:</b> '+escapeHtml(p.productCode)+'</div>':'')+
       '</div>' : '')+
       '<button class="pd-share" onclick="shareProduct()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.8 7.5l6.4 3.7M8.8 16.5l6.4-3.7"/></svg>Share</button>'+
+      '<div class="pd-reviews" id="pdReviews"><h4>Reviews &amp; Ratings</h4><p style="font-size:.8rem;color:var(--muted)">Loading…</p></div>'+
+      '<div class="pd-related" id="pdRelated"></div>'+
     '</div>';
+  loadProductReviews(p.id);
+  renderRelatedProducts(p);
+}
+/* ---------- product comparison ---------- */
+function getCompareIds(){
+  try{ return JSON.parse(localStorage.getItem('ahs_compare')||'[]'); }catch(e){ return []; }
+}
+function setCompareIds(ids){ localStorage.setItem('ahs_compare', JSON.stringify(ids)); }
+function toggleCompare(id){
+  let ids = getCompareIds();
+  if(ids.includes(id)){ ids = ids.filter(x=>x!==id); }
+  else{
+    if(ids.length>=3){ toast('Sirf 3 products tak compare kar sakte hain'); return; }
+    ids.push(id);
+  }
+  setCompareIds(ids);
+  renderProducts();
+  renderCompareBar();
+}
+function renderCompareBar(){
+  const bar = document.getElementById('compareBar');
+  if(!bar) return;
+  const ids = getCompareIds();
+  if(ids.length < 2){ bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  const items = ids.map(id=>ALL_PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+  document.getElementById('compareBarThumbs').innerHTML = items.map(p=>
+    '<div class="cmp-thumb"><img src="'+firstImg(p)+'" alt=""><button onclick="toggleCompare(\''+p.id+'\')">&times;</button></div>'
+  ).join('');
+  document.getElementById('compareBarCount').textContent = ids.length+' selected';
+}
+function openCompareModal(){
+  const ids = getCompareIds();
+  const items = ids.map(id=>ALL_PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+  if(items.length<2){ toast('Kam se kam 2 products select karein'); return; }
+  const box = document.getElementById('compareTable');
+  box.innerHTML =
+    '<tr><th>Product</th>'+items.map(p=>'<td><img src="'+firstImg(p)+'" alt="" style="width:70px;height:70px;object-fit:cover;border-radius:8px;"><div style="font-size:.78rem;font-weight:600;margin-top:4px;">'+escapeHtml(p.name)+'</div></td>').join('')+'</tr>'+
+    '<tr><th>Price</th>'+items.map(p=>'<td>'+money(p.price)+(p.oldPrice&&p.oldPrice>p.price?' <s style="color:var(--muted);font-size:.75rem;">'+money(p.oldPrice)+'</s>':'')+'</td>').join('')+'</tr>'+
+    '<tr><th>Category</th>'+items.map(p=>'<td>'+escapeHtml(catLabel(p.category))+'</td>').join('')+'</tr>'+
+    '<tr><th>Rating</th>'+items.map(p=>'<td>'+(p.rating?(p.rating+' ★'):'—')+'</td>').join('')+'</tr>'+
+    '<tr><th>Stock</th>'+items.map(p=>'<td>'+((p.stockStatus==='out')?'Out of Stock':'In Stock')+'</td>').join('')+'</tr>'+
+    '<tr><th></th>'+items.map(p=>'<td><button type="button" class="btn btn-gold" style="padding:7px 14px;font-size:.78rem;" onclick="closeCompareModal();openProduct(\''+p.id+'\')">View</button></td>').join('')+'</tr>';
+  document.getElementById('compareModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeCompareModal(){
+  document.getElementById('compareModal').classList.remove('open');
+  document.body.style.overflow='';
+}
+function clearCompare(){ setCompareIds([]); renderProducts(); renderCompareBar(); }
+
+/* ---------- hero banner ---------- */
+let heroInterval = null, heroIdx = 0, HERO_BANNERS = [];
+async function loadHeroBanners(){
+  try{
+    const snap = await firebase.firestore().collection('banners').where('active','==',true).orderBy('order','asc').get();
+    HERO_BANNERS = []; snap.forEach(d=>HERO_BANNERS.push(Object.assign({_id:d.id}, d.data())));
+    if(HERO_BANNERS.length) renderHeroBanners();
+  }catch(e){ /* keep default hero on any error */ }
+}
+function renderHeroBanners(){
+  const box = document.getElementById('heroBanner');
+  if(!box || !HERO_BANNERS.length) return;
+  clearInterval(heroInterval);
+  box.innerHTML = HERO_BANNERS.map((b,i)=>
+    '<div class="hero-slide'+(i===0?' active':'')+'" data-i="'+i+'">'+
+      '<img src="'+b.imageUrl+'" alt="'+escapeHtml(b.title||'')+'">'+
+      '<div class="hero-text">'+
+        (b.title?'<span class="hero-kicker">Al Hadi Store</span><h2>'+escapeHtml(b.title)+'</h2>':'')+
+        (b.subtitle?'<p>'+escapeHtml(b.subtitle)+'</p>':'')+
+        '<a href="'+(b.link||'#shop')+'" class="btn btn-gold">Shop Now</a>'+
+      '</div>'+
+    '</div>'
+  ).join('') + (HERO_BANNERS.length>1 ? '<div class="hero-dots">'+HERO_BANNERS.map((b,i)=>'<button class="'+(i===0?'active':'')+'" onclick="heroGo('+i+')"></button>').join('')+'</div>' : '');
+  heroIdx = 0;
+  if(HERO_BANNERS.length>1){ heroInterval = setInterval(()=>heroGo((heroIdx+1)%HERO_BANNERS.length), 4500); }
+}
+function heroGo(i){
+  heroIdx = i;
+  document.querySelectorAll('#heroBanner .hero-slide').forEach((el,idx)=>el.classList.toggle('active', idx===i));
+  document.querySelectorAll('#heroBanner .hero-dots button').forEach((el,idx)=>el.classList.toggle('active', idx===i));
+}
+
+/* ---------- saved addresses ---------- */
+let USER_ADDRESSES = [];
+let addressesUnsub = null;
+function watchAddresses(){
+  if(addressesUnsub){ addressesUnsub(); addressesUnsub = null; }
+  USER_ADDRESSES = [];
+  if(!currentUser || typeof firebase === 'undefined' || !firebase.firestore) { renderAddressList(); return; }
+  addressesUnsub = firebase.firestore().collection('users').doc(currentUser.uid).collection('addresses')
+    .onSnapshot(function(snap){
+      USER_ADDRESSES = snap.docs.map(d=>Object.assign({_id:d.id}, d.data()));
+      renderAddressList();
+      populateSavedAddressSelect();
+    }, function(){ /* non-critical */ });
+}
+function renderAddressList(){
+  const box = document.getElementById('addressList');
+  if(!box) return;
+  if(!USER_ADDRESSES.length){ box.innerHTML = '<p style="font-size:.8rem;color:var(--muted);">Koi address save nahi ki gayi.</p>'; return; }
+  box.innerHTML = USER_ADDRESSES.map(a =>
+    '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">'+
+      '<div><b style="font-size:.82rem;">'+escapeHtml(a.label||'Address')+'</b><div style="font-size:.78rem;color:var(--muted);margin-top:2px;">'+escapeHtml(a.fullName)+' · '+escapeHtml(a.phone)+'<br>'+escapeHtml(a.address)+'</div></div>'+
+      '<button type="button" class="btn" style="padding:5px 10px;font-size:.74rem;background:#fde8e8;color:#c0392b;flex-shrink:0;" onclick="deleteAddress(\''+a._id+'\')">Delete</button>'+
+    '</div>'
+  ).join('');
+}
+function showAddAddressForm(){
+  document.getElementById('addAddressForm').style.display = 'block';
+}
+async function submitAddAddress(e){
+  e.preventDefault();
+  if(!currentUser){ toast('Pehle login karein'); return false; }
+  const data = {
+    label: document.getElementById('addrLabel').value.trim(),
+    fullName: document.getElementById('addrName').value.trim(),
+    phone: document.getElementById('addrPhone').value.trim(),
+    address: document.getElementById('addrFull').value.trim(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  try{
+    await firebase.firestore().collection('users').doc(currentUser.uid).collection('addresses').add(data);
+    document.getElementById('addAddressForm').reset();
+    document.getElementById('addAddressForm').style.display = 'none';
+    toast('Address save ho gayi');
+  }catch(e){ toast('Save nahi ho saki'); }
+  return false;
+}
+async function deleteAddress(id){
+  if(!confirm('Ye address delete karni hai?')) return;
+  try{ await firebase.firestore().collection('users').doc(currentUser.uid).collection('addresses').doc(id).delete(); }
+  catch(e){ toast('Delete nahi ho saki'); }
+}
+function populateSavedAddressSelect(){
+  const picker = document.getElementById('savedAddressPicker');
+  const sel = document.getElementById('savedAddressSelect');
+  if(!picker || !sel) return;
+  if(!USER_ADDRESSES.length){ picker.style.display='none'; return; }
+  picker.style.display='block';
+  sel.innerHTML = '<option value="">— Naya Address Likhein —</option>' +
+    USER_ADDRESSES.map(a=>'<option value="'+a._id+'">'+escapeHtml(a.label||'Address')+' — '+escapeHtml(a.address.slice(0,40))+'</option>').join('');
+}
+function fillFromSavedAddress(id){
+  if(!id) return;
+  const a = USER_ADDRESSES.find(x=>x._id===id);
+  if(!a) return;
+  document.getElementById('cname').value = a.fullName || '';
+  document.getElementById('cphone').value = a.phone || '';
+  document.getElementById('caddress').value = a.address || '';
+}
+
+function openImageZoom(){
+  const img = document.getElementById('pdMainImg');
+  if(!img || !img.src) return;
+  document.getElementById('zoomImg').src = img.src;
+  document.getElementById('imageZoomModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeImageZoom(){
+  document.getElementById('imageZoomModal').classList.remove('open');
+  document.body.style.overflow='';
+}
+function renderRelatedProducts(p){
+  const box = document.getElementById('pdRelated'); if(!box) return;
+  const related = ALL_PRODUCTS.filter(x => !x.hidden && !x.deleted && x.id!==p.id && catKey(x.category)===catKey(p.category)).slice(0,8);
+  if(!related.length){ box.innerHTML=''; return; }
+  box.innerHTML = '<h4>You may also like</h4><div class="product-row">'+related.map(renderProductCard).join('')+'</div>';
+}
+
+/* ---------- reviews & ratings ---------- */
+let REVIEW_PICK = 5;
+function starsHtml(n){
+  let out='<span class="rv-stars">';
+  for(let i=1;i<=5;i++){ out += i<=n ? starSvg() : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="opacity:.35"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.4 7.2 17.7l.9-5.4L4.2 8.7l5.4-.8z"/></svg>'; }
+  return out+'</span>';
+}
+async function loadProductReviews(productId){
+  const box = document.getElementById('pdReviews');
+  if(!box) return;
+  try{
+    const snap = await firebase.firestore().collection('reviews').where('productId','==',productId).orderBy('createdAt','desc').limit(50).get();
+    const reviews = []; snap.forEach(d=>reviews.push(Object.assign({_id:d.id}, d.data())));
+    const avg = reviews.length ? (reviews.reduce((s,r)=>s+(r.rating||0),0)/reviews.length) : 0;
+    REVIEW_PICK = 5;
+    box.innerHTML =
+      '<h4>Reviews &amp; Ratings</h4>'+
+      (reviews.length ?
+        '<div class="rv-summary"><span class="rv-avg">'+avg.toFixed(1)+'</span>'+starsHtml(Math.round(avg))+'<span style="font-size:.78rem;color:var(--muted)">('+reviews.length+' reviews)</span></div>'
+        : '<p style="font-size:.82rem;color:var(--muted)">Abhi koi review nahi hai — pehla review aap likhein!</p>')+
+      '<div id="rvList">'+reviews.map(r=>
+        '<div class="rv-item">'+
+          '<div class="rv-head"><span class="rv-name">'+escapeHtml(r.userName||'Customer')+'</span><span class="rv-date">'+(r.createdAt&&r.createdAt.toDate?r.createdAt.toDate().toLocaleDateString('en-PK'):'')+
+            (isAdminLoggedIn()?' · <a href="javascript:void(0)" style="color:#c0392b;" onclick="deleteReview(\''+r._id+'\',\''+productId+'\')">Delete</a>':'')+
+          '</span></div>'+
+          starsHtml(r.rating||0)+
+          (r.comment?'<p>'+escapeHtml(r.comment)+'</p>':'')+
+        '</div>'
+      ).join('')+'</div>'+
+      '<div class="rv-form">'+
+        '<div class="frow"><label>Apna rating dein</label><div class="rv-star-pick" id="rvStarPick"></div></div>'+
+        '<div class="frow"><label for="rvName">Naam</label><input type="text" id="rvName" placeholder="Aapka naam"></div>'+
+        '<div class="frow"><label for="rvComment">Review (optional)</label><textarea id="rvComment" rows="2" placeholder="Product kaisa laga?"></textarea></div>'+
+        '<button type="button" class="btn btn-gold btn-block" onclick="submitReview(\''+productId+'\')">Review Submit Karein</button>'+
+        '<div class="form-error" id="rvError" style="display:none;">Review submit nahi ho saka. Internet check karein.</div>'+
+      '</div>';
+    renderStarPicker();
+  }catch(err){
+    box.innerHTML = '<h4>Reviews &amp; Ratings</h4><p style="font-size:.8rem;color:var(--muted)">Reviews load nahi ho sake.</p>';
+  }
+}
+function renderStarPicker(){
+  const wrap = document.getElementById('rvStarPick'); if(!wrap) return;
+  wrap.innerHTML = [1,2,3,4,5].map(i=>
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="'+(i<=REVIEW_PICK?'currentColor':'none')+'" stroke="currentColor" stroke-width="1.6" style="color:var(--star)" onclick="pickReviewStar('+i+')"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.4 7.2 17.7l.9-5.4L4.2 8.7l5.4-.8z"/></svg>'
+  ).join('');
+}
+function pickReviewStar(n){ REVIEW_PICK = n; renderStarPicker(); }
+async function deleteReview(reviewId, productId){
+  if(!confirm('Ye review delete karna hai?')) return;
+  try{ await firebase.firestore().collection('reviews').doc(reviewId).delete(); loadProductReviews(productId); }
+  catch(e){ toast('Delete nahi ho saka'); }
+}
+async function submitReview(productId){
+  const errEl = document.getElementById('rvError');
+  errEl.style.display='none';
+  const name = (document.getElementById('rvName').value||'').trim() || 'Customer';
+  const comment = (document.getElementById('rvComment').value||'').trim();
+  const rating = REVIEW_PICK || 5;
+  try{
+    await firebase.firestore().collection('reviews').add({
+      productId: productId,
+      userName: name,
+      rating: rating,
+      comment: comment || null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('Shukriya! Aapka review submit ho gaya');
+    loadProductReviews(productId);
+  }catch(err){
+    errEl.style.display='block';
+  }
 }
 function pdGo(i){ PD.index=i; document.getElementById('pdMainImg').src = PD.product.images[i].src; document.querySelectorAll('#pdThumbs img').forEach((t,idx)=>t.classList.toggle('active',idx===i)); }
 function pdSlide(d){ const n=PD.product.images.length; pdGo((PD.index+d+n)%n); }
@@ -508,6 +834,8 @@ function openCheckout(){
   document.getElementById('finalStep').classList.remove('show');
   document.getElementById('slipSection').style.display='none';
   document.getElementById('codSection').style.display='none';
+  const ci=document.getElementById('couponInput'); if(ci) ci.value = APPLIED_COUPON ? APPLIED_COUPON.code : '';
+  const cm=document.getElementById('couponMsg'); if(cm){ cm.className='coupon-msg'; cm.textContent=''; }
   closeCart();
   document.getElementById('checkoutModal').classList.add('open');
   document.body.style.overflow='hidden';
@@ -520,15 +848,69 @@ function buildCheckoutSummary(){
     '<div class="co-line"><img src="'+it.img+'" alt=""><div class="m"><h5>'+escapeHtml(it.name)+'</h5><small>'+(it.size?'Size: '+escapeHtml(it.size)+' · ':'')+'Qty: '+it.qty+'</small></div><div class="r">'+money(it.price*it.qty)+'</div></div>'
   ).join('');
   const sub = cartSubtotal();
-  const total = sub + DELIVERY_CHARGE;
+  const discount = couponDiscountAmount(sub);
+  const total = Math.max(0, sub - discount) + DELIVERY_CHARGE;
   document.getElementById('coItems').textContent = money(sub);
   document.getElementById('coDelivery').textContent = money(DELIVERY_CHARGE);
+  const discRow = document.getElementById('coDiscountRow');
+  if(discRow){
+    if(discount>0){ discRow.style.display='flex'; document.getElementById('coDiscount').textContent = '- '+money(discount); }
+    else { discRow.style.display='none'; }
+  }
   document.getElementById('coTotal').textContent = money(total);
   // hidden fields for the email
   document.getElementById('fOrderItems').value = CART.map(it => it.name+(it.size?' ('+it.size+')':'')+' x'+it.qty+' = '+money(it.price*it.qty)).join('\n');
   document.getElementById('fItemsTotal').value = money(sub);
   document.getElementById('fTotal').value = money(total);
   document.getElementById('finalTotal').textContent = money(total);
+  const couponField = document.getElementById('fCoupon');
+  if(couponField) couponField.value = APPLIED_COUPON ? (APPLIED_COUPON.code+' (-'+money(discount)+')') : 'None';
+}
+
+/* ---------- coupons ---------- */
+function couponDiscountAmount(sub){
+  if(!APPLIED_COUPON) return 0;
+  const c = APPLIED_COUPON;
+  let amt = c.type==='percent' ? Math.round(sub * (c.value/100)) : c.value;
+  amt = Math.max(0, Math.min(amt, sub));
+  return amt;
+}
+async function applyCoupon(){
+  const input = document.getElementById('couponInput');
+  const msg = document.getElementById('couponMsg');
+  const code = (input.value||'').trim().toUpperCase();
+  msg.className = 'coupon-msg';
+  if(!code){ msg.textContent = 'Coupon code likhein'; msg.classList.add('show','err'); return; }
+  msg.textContent = 'Check kar rahe hain…'; msg.classList.add('show');
+  try{
+    const doc = await firebase.firestore().collection('coupons').doc(code).get();
+    if(!doc.exists){ APPLIED_COUPON = null; msg.textContent = 'Ye coupon valid nahi hai'; msg.classList.add('err'); buildCheckoutSummary(); return; }
+    const c = doc.data();
+    const sub = cartSubtotal();
+    if(!c.active){ msg.textContent='Ye coupon abhi active nahi hai'; msg.classList.add('err'); buildCheckoutSummary(); return; }
+    if(c.expiresAt && c.expiresAt.toDate && c.expiresAt.toDate() < new Date()){ msg.textContent='Is coupon ki miyaad khatam ho chuki hai'; msg.classList.add('err'); buildCheckoutSummary(); return; }
+    if(c.usageLimit!=null && (c.usedCount||0) >= c.usageLimit){ msg.textContent='Ye coupon apni limit tak use ho chuka hai'; msg.classList.add('err'); buildCheckoutSummary(); return; }
+    if(c.minOrder && sub < c.minOrder){ msg.textContent='Kam se kam order '+money(c.minOrder)+' ka hona chahiye'; msg.classList.add('err'); buildCheckoutSummary(); return; }
+    APPLIED_COUPON = { code: code, type: c.type, value: c.value };
+    msg.textContent = 'Coupon apply ho gaya! 🎉';
+    msg.classList.add('ok');
+    buildCheckoutSummary();
+  }catch(err){
+    msg.textContent = 'Internet check karein — coupon check nahi ho saka';
+    msg.classList.add('err');
+  }
+}
+function removeCoupon(){
+  APPLIED_COUPON = null;
+  const input = document.getElementById('couponInput'); if(input) input.value='';
+  const msg = document.getElementById('couponMsg'); if(msg){ msg.className='coupon-msg'; msg.textContent=''; }
+  buildCheckoutSummary();
+}
+async function bumpCouponUsage(code){
+  if(!code) return;
+  try{
+    await firebase.firestore().collection('coupons').doc(code).update({ usedCount: firebase.firestore.FieldValue.increment(1) });
+  }catch(e){ /* non-critical */ }
 }
 
 function selPay(radio){
@@ -548,6 +930,8 @@ document.getElementById('orderForm').addEventListener('submit', function(e){
   btn.textContent='Placing Order…'; btn.disabled=true;
 
   // Collect all order data
+  const sub = cartSubtotal();
+  const discount = couponDiscountAmount(sub);
   const orderData = {
     timestamp: new Date().toLocaleString('en-PK'),
     fullName: document.getElementById('cname').value.trim(),
@@ -557,9 +941,11 @@ document.getElementById('orderForm').addEventListener('submit', function(e){
     paymentMethod: form.querySelector('input[name="Payment Method"]:checked').value,
     notes: document.getElementById('cnotes').value.trim() || 'N/A',
     orderItems: CART.map(it => it.name+(it.size?' ('+it.size+')':'')+' x'+it.qty).join(', '),
-    itemsTotal: cartSubtotal(),
+    itemsTotal: sub,
+    couponCode: APPLIED_COUPON ? APPLIED_COUPON.code : null,
+    discount: discount,
     delivery: DELIVERY_CHARGE,
-    totalAmount: cartSubtotal() + DELIVERY_CHARGE,
+    totalAmount: Math.max(0, sub - discount) + DELIVERY_CHARGE,
     adminPhone: '923134586476'
   };
 
@@ -568,6 +954,7 @@ document.getElementById('orderForm').addEventListener('submit', function(e){
 
   // Save order to Firestore so it can be tracked later (admin + customer)
   saveOrderToFirestore(orderData);
+  if(APPLIED_COUPON){ bumpCouponUsage(APPLIED_COUPON.code); }
 
   // Then send email via formsubmit (existing functionality)
   fetch('https://formsubmit.co/ajax/qraza2376@gmail.com',{
@@ -658,6 +1045,7 @@ function finalSuccess(){
   document.getElementById('paymentStep').classList.remove('show');
   document.getElementById('finalStep').classList.add('show');
   CART = []; saveCart(); updateCartUI();
+  APPLIED_COUPON = null;
 }
 
 /* ---------- share ---------- */
@@ -713,7 +1101,7 @@ function toast(msg){
 
 /* ---------- misc ---------- */
 function scrollTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeCompareModal(); closeInvoice(); closeImageZoom(); closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
 document.getElementById('year').textContent = new Date().getFullYear();
 
 /* ---------- account (Firebase Auth) + liked products ---------- */
@@ -766,11 +1154,34 @@ function updateAccountUI(){
     inn.style.display='block';
     document.getElementById('accEmail').textContent = currentUser.email || '';
     renderLikedGrid();
+    watchAddresses();
   } else {
     out.style.display='block';
     inn.style.display='none';
+    watchAddresses();
   }
   if(btn) btn.classList.toggle('logged-in', !!currentUser);
+}
+
+function signInWithGoogle(){
+  const err1 = document.getElementById('liError');
+  const err2 = document.getElementById('suError');
+  [err1,err2].forEach(function(e){ if(e) e.classList.remove('show'); });
+  if(typeof firebase === 'undefined' || !firebase.auth){
+    toast('Internet check karein');
+    return;
+  }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider)
+    .then(function(){
+      closeAccount();
+      toast('Login ho gaye — khush aamdeed!');
+    })
+    .catch(function(error){
+      const msg = friendlyAuthError(error);
+      if(err1){ err1.textContent = msg; err1.classList.add('show'); }
+      toast(msg);
+    });
 }
 
 function submitLogin(e){
@@ -1589,19 +2000,91 @@ function orderStatusBadge(status){
   const color = ORDER_STATUS_COLORS[s] || '#667';
   return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;color:#fff;background:'+color+';">'+escapeHtml(label)+'</span>';
 }
+const ORDER_STEPS = ['pending','confirmed','shipped','delivered'];
+function orderTimelineHtml(status){
+  if(status==='cancelled'){
+    return '<div style="font-size:12px;color:#dc2626;font-weight:600;margin:8px 0;">❌ Ye order cancel ho chuka hai</div>';
+  }
+  const idx = ORDER_STEPS.indexOf(status||'pending');
+  const cur = idx<0 ? 0 : idx;
+  return '<div style="display:flex;align-items:center;margin:10px 0 4px;">'+
+    ORDER_STEPS.map(function(s,i){
+      const done = i<=cur;
+      const dot = '<div style="width:11px;height:11px;border-radius:50%;background:'+(done?'#16a34a':'#e0e0e0')+';flex-shrink:0;"></div>';
+      const line = i<ORDER_STEPS.length-1 ? '<div style="flex:1;height:2px;background:'+(i<cur?'#16a34a':'#e0e0e0')+';"></div>' : '';
+      return dot+line;
+    }).join('')+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:8px;">'+
+      ORDER_STEPS.map(s=>'<span>'+ORDER_STATUS_LABELS[s]+'</span>').join('')+
+    '</div>';
+}
 function orderCardHtml(id, o){
   const items = o.orderItems || '';
   const total = money(o.totalAmount || 0);
   const date = o.timestamp || '';
+  const status = o.status || 'pending';
+  let actionBtn = '';
+  if(status==='pending' && !o.cancelRequested){
+    actionBtn = '<button type="button" class="btn" style="padding:6px 12px;font-size:12px;background:#fde8e8;color:#c0392b;margin-top:6px;" onclick="requestCancelOrder(\''+id+'\')">Cancel Order</button>';
+  } else if(o.cancelRequested){
+    actionBtn = '<div style="font-size:12px;color:#b8860b;margin-top:6px;">⏳ Cancel request bheji ja chuki hai</div>';
+  } else if(status==='delivered' && !o.returnRequested){
+    actionBtn = '<button type="button" class="btn" style="padding:6px 12px;font-size:12px;background:#fff3d6;color:#b8860b;margin-top:6px;" onclick="requestReturnOrder(\''+id+'\')">Return Request Karein</button>';
+  } else if(o.returnRequested){
+    actionBtn = '<div style="font-size:12px;color:#b8860b;margin-top:6px;">⏳ Return request bheji ja chuki hai</div>';
+  }
   return '<div class="order-card" style="border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:14px;margin-bottom:10px;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">'+
       '<b style="font-size:13px;color:#667;">Order #'+escapeHtml(id.slice(-6).toUpperCase())+'</b>'+
-      orderStatusBadge(o.status)+
+      orderStatusBadge(status)+
     '</div>'+
     '<div style="font-size:13px;color:#667;margin-bottom:4px;">'+escapeHtml(date)+'</div>'+
+    orderTimelineHtml(status)+
     '<div style="font-size:14px;margin-bottom:6px;">'+escapeHtml(items)+'</div>'+
     '<div style="font-weight:700;">'+total+'</div>'+
+    '<button type="button" class="btn btn-ghost" style="padding:6px 12px;font-size:12px;margin-top:8px;margin-right:6px;" onclick=\'openInvoice("'+id+'", '+JSON.stringify(o).replace(/'/g,"&#39;")+')\'>🧾 Invoice Dekhein</button>'+
+    actionBtn+
   '</div>';
+}
+function openInvoice(id, o){
+  const rows = (o.orderItems||'').split(',').map(s=>s.trim()).filter(Boolean);
+  document.getElementById('invNumber').textContent = '#'+id.slice(-6).toUpperCase();
+  document.getElementById('invDate').textContent = o.timestamp || '';
+  document.getElementById('invName').textContent = o.fullName || '';
+  document.getElementById('invPhone').textContent = o.phone || '';
+  document.getElementById('invAddress').textContent = o.address || '';
+  document.getElementById('invPayment').textContent = o.paymentMethod || '';
+  document.getElementById('invItems').innerHTML = rows.map(r=>'<tr><td>'+escapeHtml(r)+'</td></tr>').join('');
+  document.getElementById('invSubtotal').textContent = money(o.itemsTotal||0);
+  const discRow = document.getElementById('invDiscountRow');
+  if(o.discount && o.discount>0){ discRow.style.display='flex'; document.getElementById('invDiscount').textContent = '- '+money(o.discount)+(o.couponCode?(' ('+o.couponCode+')'):''); }
+  else discRow.style.display='none';
+  document.getElementById('invDelivery').textContent = money(o.delivery||0);
+  document.getElementById('invTotal').textContent = money(o.totalAmount||0);
+  document.getElementById('invoiceModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeInvoice(){
+  document.getElementById('invoiceModal').classList.remove('open');
+  document.body.style.overflow='';
+}
+function printInvoice(){ window.print(); }
+async function requestCancelOrder(orderId){
+  if(!confirm('Kya aap ye order cancel karna chahte hain?')) return;
+  try{
+    await firebase.firestore().collection('orders').doc(orderId).update({ cancelRequested: true, cancelRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    toast('Cancel request bhej di gayi');
+    renderMyOrders();
+  }catch(e){ toast('Request bhej nahi saki — internet check karein'); }
+}
+async function requestReturnOrder(orderId){
+  const reason = prompt('Return ki wajah likhein (optional):','');
+  try{
+    await firebase.firestore().collection('orders').doc(orderId).update({ returnRequested: true, returnReason: reason||'', returnRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    toast('Return request bhej di gayi');
+    renderMyOrders();
+  }catch(e){ toast('Request bhej nahi saki — internet check karein'); }
 }
 function openOrdersModal(){
   document.getElementById('ordersModal').classList.add('open');
@@ -1668,8 +2151,150 @@ function switchAdminTab(tab){
   document.getElementById('adminPane-orders').style.display = (tab==='orders') ? 'block' : 'none';
   document.getElementById('adminPane-bulk').style.display = (tab==='bulk') ? 'block' : 'none';
   document.getElementById('adminPane-analytics').style.display = (tab==='analytics') ? 'block' : 'none';
+  document.getElementById('adminPane-coupons').style.display = (tab==='coupons') ? 'block' : 'none';
+  document.getElementById('adminPane-banners').style.display = (tab==='banners') ? 'block' : 'none';
   if(tab==='orders') loadAdminOrders();
   if(tab==='analytics') loadAdminAnalytics();
+  if(tab==='coupons') loadAdminCoupons();
+  if(tab==='banners') loadAdminBanners();
+}
+
+/* ---------- admin: banners ---------- */
+let adminBannersUnsub = null;
+function loadAdminBanners(){
+  const list = document.getElementById('adminBannersList');
+  list.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+  if(adminBannersUnsub) adminBannersUnsub();
+  adminBannersUnsub = firebase.firestore().collection('banners').orderBy('order','asc')
+    .onSnapshot(function(snap){
+      if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);">Abhi koi banner nahi hai — default banner dikhega.</p>'; return; }
+      const rows = [];
+      snap.forEach(function(doc){
+        const b = doc.data();
+        rows.push(
+          '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">'+
+            '<img src="'+b.imageUrl+'" alt="" style="width:90px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0;">'+
+            '<div style="flex:1;min-width:140px;"><b>'+escapeHtml(b.title||'(no title)')+'</b><div style="font-size:.76rem;color:var(--muted);">'+escapeHtml(b.subtitle||'')+'</div></div>'+
+            '<label style="font-size:.78rem;display:flex;align-items:center;gap:5px;"><input type="checkbox" '+(b.active?'checked':'')+' onchange="toggleBannerActive(\''+doc.id+'\',this.checked)"> Active</label>'+
+            '<button type="button" class="btn" style="padding:6px 10px;font-size:.78rem;background:#fde8e8;color:#c0392b;" onclick="deleteBanner(\''+doc.id+'\')">Delete</button>'+
+          '</div>'
+        );
+      });
+      list.innerHTML = rows.join('');
+    }, function(){ list.innerHTML = '<p style="color:var(--muted);">Banners load nahi ho sake.</p>'; });
+}
+async function submitAddBanner(e){
+  e.preventDefault();
+  const errEl = document.getElementById('bannerAddError');
+  errEl.classList.remove('show');
+  const fileInput = document.getElementById('bnImage');
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){ errEl.textContent='Banner image chunein'; errEl.classList.add('show'); return false; }
+  const btn = document.getElementById('bnSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Upload ho raha hai…';
+  try{
+    const url = await uploadImageToCloudinary(file);
+    const countSnap = await firebase.firestore().collection('banners').get();
+    await firebase.firestore().collection('banners').add({
+      imageUrl: url,
+      title: document.getElementById('bnTitle').value.trim(),
+      subtitle: document.getElementById('bnSubtitle').value.trim(),
+      link: document.getElementById('bnLink').value.trim() || '#shop',
+      order: countSnap.size,
+      active: true,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('bannerAddForm').reset();
+    toast('Banner add ho gaya!');
+    loadHeroBanners();
+  }catch(err){
+    errEl.textContent = 'Banner add nahi ho saka. ('+((err&&err.message)||'error')+')';
+    errEl.classList.add('show');
+  }
+  btn.disabled = false; btn.textContent = 'Banner Add Karein';
+  return false;
+}
+async function toggleBannerActive(id, active){
+  try{ await firebase.firestore().collection('banners').doc(id).update({ active: active }); loadHeroBanners(); }
+  catch(e){ toast('Update nahi ho saka'); }
+}
+async function deleteBanner(id){
+  if(!confirm('Ye banner delete karna hai?')) return;
+  try{ await firebase.firestore().collection('banners').doc(id).delete(); toast('Banner delete ho gaya'); loadHeroBanners(); }
+  catch(e){ toast('Delete nahi ho saka'); }
+}
+
+/* ---------- admin: coupons ---------- */
+let adminCouponsUnsub = null;
+function loadAdminCoupons(){
+  const list = document.getElementById('adminCouponsList');
+  list.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+  if(adminCouponsUnsub) adminCouponsUnsub();
+  adminCouponsUnsub = firebase.firestore().collection('coupons').orderBy('createdAt','desc')
+    .onSnapshot(function(snap){
+      if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);">Abhi koi coupon nahi hai.</p>'; return; }
+      const rows = [];
+      snap.forEach(function(doc){
+        const c = doc.data();
+        const expiry = c.expiresAt && c.expiresAt.toDate ? c.expiresAt.toDate().toLocaleDateString('en-PK') : '—';
+        rows.push(
+          '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
+            '<div>'+
+              '<b>'+escapeHtml(doc.id)+'</b> — '+(c.type==='percent'?(c.value+'% off'):(money(c.value)+' off'))+
+              '<div style="font-size:.76rem;color:var(--muted);margin-top:2px;">'+
+                (c.minOrder?('Min order: '+money(c.minOrder)+' · '):'')+
+                'Used: '+(c.usedCount||0)+(c.usageLimit?('/'+c.usageLimit):'')+' · Expiry: '+expiry+
+              '</div>'+
+            '</div>'+
+            '<div style="display:flex;gap:8px;align-items:center;">'+
+              '<label style="font-size:.78rem;display:flex;align-items:center;gap:5px;"><input type="checkbox" '+(c.active?'checked':'')+' onchange="toggleCouponActive(\''+doc.id+'\',this.checked)"> Active</label>'+
+              '<button type="button" class="btn" style="padding:6px 10px;font-size:.78rem;background:#fde8e8;color:#c0392b;" onclick="deleteCoupon(\''+doc.id+'\')">Delete</button>'+
+            '</div>'+
+          '</div>'
+        );
+      });
+      list.innerHTML = rows.join('');
+    }, function(){ list.innerHTML = '<p style="color:var(--muted);">Coupons load nahi ho sake.</p>'; });
+}
+async function submitAddCoupon(e){
+  e.preventDefault();
+  const errEl = document.getElementById('couponAddError');
+  errEl.classList.remove('show');
+  const code = document.getElementById('cpCode').value.trim().toUpperCase();
+  const type = document.getElementById('cpType').value;
+  const value = Number(document.getElementById('cpValue').value);
+  const minOrderRaw = document.getElementById('cpMinOrder').value;
+  const limitRaw = document.getElementById('cpLimit').value;
+  const expiryRaw = document.getElementById('cpExpiry').value;
+  if(!code || !value){ errEl.textContent='Code aur value zaroori hain'; errEl.classList.add('show'); return false; }
+  try{
+    await firebase.firestore().collection('coupons').doc(code).set({
+      code: code,
+      type: type,
+      value: value,
+      minOrder: minOrderRaw ? Number(minOrderRaw) : null,
+      usageLimit: limitRaw ? Number(limitRaw) : null,
+      usedCount: 0,
+      active: true,
+      expiresAt: expiryRaw ? firebase.firestore.Timestamp.fromDate(new Date(expiryRaw+'T23:59:59')) : null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('couponAddForm').reset();
+    toast('Coupon add ho gaya!');
+  }catch(err){
+    errEl.textContent = 'Coupon add nahi ho saka. ('+((err&&err.message)||'error')+')';
+    errEl.classList.add('show');
+  }
+  return false;
+}
+async function toggleCouponActive(code, active){
+  try{ await firebase.firestore().collection('coupons').doc(code).update({ active: active }); }
+  catch(e){ toast('Update nahi ho saka'); }
+}
+async function deleteCoupon(code){
+  if(!confirm('Ye coupon delete karna hai?')) return;
+  try{ await firebase.firestore().collection('coupons').doc(code).delete(); toast('Coupon delete ho gaya'); }
+  catch(e){ toast('Delete nahi ho saka'); }
 }
 function loadAdminOrders(){
   const list = document.getElementById('adminOrdersList');
@@ -1696,6 +2321,19 @@ function adminOrderRowHtml(id, o){
   const statusOptions = Object.keys(ORDER_STATUS_LABELS).map(function(s){
     return '<option value="'+s+'"'+((o.status||'pending')===s?' selected':'')+'>'+ORDER_STATUS_LABELS[s]+'</option>';
   }).join('');
+  let flags = '';
+  if(o.cancelRequested){
+    flags += '<div style="margin-top:8px;padding:8px 10px;background:#fde8e8;border-radius:8px;font-size:13px;color:#c0392b;display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
+      '<span>⚠️ Customer ne is order ko cancel karne ki request ki hai</span>'+
+      '<button type="button" class="btn" style="padding:4px 10px;font-size:12px;background:#fff;" onclick="clearOrderFlag(\''+id+'\',\'cancelRequested\')">Clear</button>'+
+    '</div>';
+  }
+  if(o.returnRequested){
+    flags += '<div style="margin-top:8px;padding:8px 10px;background:#fff3d6;border-radius:8px;font-size:13px;color:#b8860b;display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
+      '<span>↩️ Return request'+(o.returnReason?(': '+escapeHtml(o.returnReason)):'')+'</span>'+
+      '<button type="button" class="btn" style="padding:4px 10px;font-size:12px;background:#fff;" onclick="clearOrderFlag(\''+id+'\',\'returnRequested\')">Clear</button>'+
+    '</div>';
+  }
   return '<div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:14px;margin-bottom:10px;">'+
     '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">'+
       '<div>'+
@@ -1707,7 +2345,15 @@ function adminOrderRowHtml(id, o){
     '<div style="margin-top:8px;font-size:14px;">'+escapeHtml(o.orderItems||'')+'</div>'+
     '<div style="margin-top:4px;color:#667;font-size:13px;">'+escapeHtml(o.address||'')+'</div>'+
     '<div style="margin-top:6px;font-weight:700;">'+money(o.totalAmount||0)+'</div>'+
+    flags+
   '</div>';
+}
+async function clearOrderFlag(id, field){
+  try{
+    const update = {}; update[field] = false;
+    await firebase.firestore().collection('orders').doc(id).update(update);
+    toast('Clear ho gaya');
+  }catch(e){ toast('Fail ho gaya'); }
 }
 function updateOrderStatus(id, status){
   if(typeof firebase === 'undefined' || !firebase.firestore) return;
@@ -1914,3 +2560,4 @@ updateCartUI();
 loadProducts();
 watchCustomProducts();
 trackEvent('page_view');
+loadHeroBanners();

@@ -29,6 +29,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth.uid == userId;
       allow write: if request.auth.uid == userId;
+
+      match /addresses/{addressId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Orders — customer checkout par order create kar sakta hai (create
@@ -37,7 +41,9 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelRequested','cancelRequestedAt','returnRequested','returnReason','returnRequestedAt']);
+      allow delete: if isAdmin();
     }
 
     // Analytics summary (site visits, product views, add-to-cart counts) —
@@ -46,6 +52,38 @@ service cloud.firestore {
     match /analytics/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Homepage hero banners — sab dekh sakte hain, sirf admin add/edit/
+    // delete kar sakta hai.
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Coupons — customers checkout par sirf ek specific code "get" kar
+    // sakte hain (validate karne ke liye), lekin poori list nahi dekh
+    // sakte (isse random discovery rukti hai). Order place karte waqt
+    // sirf "usedCount" field update ho sakta hai — discount value ya
+    // active/expiry customer badal nahi sakta. Add/delete sirf admin.
+    match /coupons/{code} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']);
+    }
+
+    // Product reviews — koi bhi likh (create) sakta hai (login zaroori
+    // nahi, jaise orders ke liye hai), lekin edit/delete sirf admin kar
+    // sakta hai taake fake/spam reviews hataye ja sakein.
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.productId is string;
+      allow update, delete: if isAdmin();
     }
   }
 }

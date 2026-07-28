@@ -98,6 +98,7 @@
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" id="searchInput" placeholder="Search products, brands and categories…" autocomplete="off">
       <button class="search-btn" onclick="focusResults()"><span>Search</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
+      <div class="search-suggest" id="searchSuggest"></div>
     </div>
 
     <div class="header-actions">
@@ -129,10 +130,40 @@
 <main class="wrap">
   <h1 class="sr-only">Al Hadi Store — Online Shopping in Pakistan | Clothing, Footwear &amp; Lifestyle Products</h1>
 
+  <!-- ============ HERO BANNER ============ -->
+  <section class="hero-banner" id="heroBanner">
+    <div class="hero-slide active" id="heroDefault">
+      <div class="hero-text">
+        <span class="hero-kicker">Al Hadi Store</span>
+        <h2>Quality · Trust · Style</h2>
+        <p>Clothing, footwear &amp; lifestyle products — delivered across Pakistan.</p>
+        <a href="#shop" class="btn btn-gold">Shop Now</a>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ SHOP BY CATEGORY ============ -->
   <section class="cat-circles">
     <div class="cat-circles-head"><h2>Shop by Category</h2></div>
     <div class="cat-circles-row" id="catCircles"></div>
+  </section>
+
+  <!-- ============ FLASH SALE ============ -->
+  <section class="section prow-sec" id="flashSaleSec" style="display:none;">
+    <div class="sec-head"><div><h2><span class="bar" style="background:#c0392b;"></span> ⚡ Flash Sale</h2><p>Limited time deals — grab them before stock runs out</p></div></div>
+    <div class="product-row" id="flashSaleRow"></div>
+  </section>
+
+  <!-- ============ NEW ARRIVALS ============ -->
+  <section class="section prow-sec" id="newArrivalsSec" style="display:none;">
+    <div class="sec-head"><div><h2><span class="bar"></span> New Arrivals</h2><p>Freshly added to the store</p></div></div>
+    <div class="product-row" id="newArrivalsRow"></div>
+  </section>
+
+  <!-- ============ BEST SELLERS ============ -->
+  <section class="section prow-sec" id="bestSellersSec" style="display:none;">
+    <div class="sec-head"><div><h2><span class="bar" style="background:#e0a53c;"></span> Best Sellers</h2><p>Most loved by our customers</p></div></div>
+    <div class="product-row" id="bestSellersRow"></div>
   </section>
 
   <!-- ============ PRODUCTS ============ -->
@@ -145,6 +176,12 @@
     </div>
     <div class="cat-tabs" id="catTabs"></div>
     <div class="product-grid" id="productGrid"></div>
+  </section>
+
+  <!-- ============ RECENTLY VIEWED ============ -->
+  <section class="section prow-sec" id="recentSec" style="display:none;">
+    <div class="sec-head"><div><h2><span class="bar" style="background:#7a7a7a;"></span> Recently Viewed</h2></div></div>
+    <div class="product-row" id="recentRow"></div>
   </section>
 </main>
 
@@ -184,6 +221,8 @@
       <div class="foot-col">
         <h5>Help</h5>
         <a href="javascript:void(0)" onclick="openCheckout()">Place an Order</a>
+        <a href="about-us.html">About Us</a>
+        <a href="faq.html">FAQ</a>
         <a href="mailto:qraza2376@gmail.com">qraza2376@gmail.com</a>
         <div>JazzCash / Easypaisa: 0334 4996576</div>
         <div>Cash on Delivery available</div>
@@ -239,6 +278,67 @@
   </div>
 </div>
 
+<!-- ============ COMPARE BAR ============ -->
+<div class="compare-bar" id="compareBar">
+  <div class="cmp-thumbs" id="compareBarThumbs"></div>
+  <span class="cmp-count" id="compareBarCount">0 selected</span>
+  <button type="button" class="btn btn-navy" style="padding:8px 16px;font-size:.82rem;" onclick="openCompareModal()">Compare</button>
+  <button type="button" class="btn btn-ghost" style="padding:8px 12px;font-size:.82rem;" onclick="clearCompare()">Clear</button>
+</div>
+
+<!-- ============ COMPARE MODAL ============ -->
+<div class="modal" id="compareModal">
+  <div class="modal-bg" onclick="closeCompareModal()"></div>
+  <div class="modal-box" style="max-width:760px;">
+    <button class="modal-close" onclick="closeCompareModal()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="modal-pad" style="overflow-x:auto;">
+      <h2 style="margin:0 0 16px;">Compare Products</h2>
+      <table class="compare-table" id="compareTable"></table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ INVOICE MODAL ============ -->
+<div class="modal" id="invoiceModal">
+  <div class="modal-bg" onclick="closeInvoice()"></div>
+  <div class="modal-box sm">
+    <button class="modal-close no-print" onclick="closeInvoice()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="modal-pad" id="invoicePrintArea">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <b style="font-size:1.1rem;color:var(--navy);">Al Hadi Store</b><br>
+          <span style="font-size:.78rem;color:var(--muted);">House 16, Street 40, Hafeez Road (Munshi Hospital), Lahore</span>
+        </div>
+        <div style="text-align:right;">
+          <b>Invoice <span id="invNumber"></span></b><br>
+          <span style="font-size:.78rem;color:var(--muted);" id="invDate"></span>
+        </div>
+      </div>
+      <div style="border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);padding:12px 0;margin-bottom:14px;font-size:.85rem;">
+        <div><b>Naam:</b> <span id="invName"></span></div>
+        <div><b>Phone:</b> <span id="invPhone"></span></div>
+        <div><b>Address:</b> <span id="invAddress"></span></div>
+        <div><b>Payment:</b> <span id="invPayment"></span></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:14px;" id="invItemsTable">
+        <tbody id="invItems"></tbody>
+      </table>
+      <div class="sumrow"><span>Items Subtotal</span><span id="invSubtotal">Rs 0</span></div>
+      <div class="sumrow" id="invDiscountRow" style="display:none;color:#1a8a4a;"><span>Discount</span><span id="invDiscount">- Rs 0</span></div>
+      <div class="sumrow"><span>Delivery</span><span id="invDelivery">Rs 0</span></div>
+      <div class="sumrow total"><span>Total</span><span class="amt" id="invTotal">Rs 0</span></div>
+      <button type="button" class="btn btn-navy btn-block no-print" style="margin-top:16px;" onclick="printInvoice()">🖨️ Print / Save as PDF</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="imageZoomModal">
+  <div class="modal-bg" onclick="closeImageZoom()" style="background:rgba(0,0,0,.9);"></div>
+  <div style="position:relative;max-width:92vw;max-height:92vh;margin:auto;display:flex;align-items:center;justify-content:center;">
+    <button class="modal-close" onclick="closeImageZoom()" style="position:fixed;top:16px;right:16px;background:#fff;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <img id="zoomImg" src="" alt="" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:8px;">
+  </div>
+</div>
+
 <!-- ============ CHECKOUT MODAL ============ -->
 <div class="modal" id="checkoutModal">
   <div class="modal-bg" onclick="closeCheckout()"></div>
@@ -255,12 +355,26 @@
       <div class="co-summary">
         <h4>Order Summary</h4>
         <div id="coLines"></div>
+        <div class="coupon-box">
+          <div class="coupon-row">
+            <input type="text" id="couponInput" placeholder="Coupon code (agar hai)" autocapitalize="characters" onkeydown="if(event.key==='Enter'){event.preventDefault();applyCoupon();}">
+            <button type="button" class="btn btn-navy" onclick="applyCoupon()">Apply</button>
+          </div>
+          <div class="coupon-msg" id="couponMsg"></div>
+        </div>
         <div class="sumrow" style="margin-top:14px;"><span>Items</span><span id="coItems">Rs 0</span></div>
+        <div class="sumrow" id="coDiscountRow" style="display:none;color:#1a8a4a;"><span>Discount</span><span id="coDiscount">- Rs 0</span></div>
         <div class="sumrow"><span>Delivery</span><span id="coDelivery">Rs 200</span></div>
         <div class="sumrow total"><span>Total</span><span class="amt" id="coTotal">Rs 200</span></div>
       </div>
 
       <div class="co-form">
+        <div id="savedAddressPicker" style="display:none;margin-bottom:14px;">
+          <label style="font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Saved Address Use Karein</label>
+          <select id="savedAddressSelect" onchange="fillFromSavedAddress(this.value)" style="width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;">
+            <option value="">— Naya Address Likhein —</option>
+          </select>
+        </div>
         <form id="orderForm" novalidate>
           <div class="frow">
             <label for="cname">Full Name</label>
@@ -288,6 +402,7 @@
           <input type="hidden" name="_subject" value="New Order — Al Hadi Store">
           <input type="hidden" name="Order Items" id="fOrderItems">
           <input type="hidden" name="Items Total" id="fItemsTotal">
+          <input type="hidden" name="Coupon" id="fCoupon" value="None">
           <input type="hidden" name="Delivery" id="fDelivery" value="Rs 200">
           <input type="hidden" name="Total Amount" id="fTotal">
           <button type="submit" class="btn btn-navy btn-block btn-lg" id="submitBtn">Place Order</button>
@@ -359,6 +474,12 @@
           <button type="button" class="acc-tab" data-tab="signup" onclick="switchAccTab('signup')">Naya Account</button>
         </div>
 
+        <button type="button" class="btn btn-block google-btn" style="margin:14px 0;" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 48 48" style="vertical-align:-4px;margin-right:8px;"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.8-.4-4.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3c-7.4 0-13.8 4.2-17.7 10.7z"/><path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.5-5.4C29.7 36.4 27 37 24 37c-5.2 0-9.6-3.3-11.3-8l-6.6 5.1C9.9 40.5 16.4 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.5 5.4C41.5 36 45 30.6 45 24c0-1.4-.1-2.8-.4-3.5z"/></svg>
+          Continue with Google
+        </button>
+        <div class="or-divider"><span>ya email se</span></div>
+
         <div class="acc-pane show" id="accPane-login">
           <form id="loginForm" onsubmit="return submitLogin(event)">
             <div class="frow">
@@ -398,6 +519,18 @@
         <span class="kicker">My Account</span>
         <h2 style="margin:4px 0 4px;word-break:break-all;" id="accEmail"></h2>
         <button type="button" class="btn btn-ghost btn-block" style="margin:6px 0 16px;" onclick="closeAccount();openOrdersModal();">Mera Order Track Karein</button>
+
+        <p style="color:var(--muted);font-size:.85rem;margin:0 0 10px;font-weight:600;">Saved Addresses:</p>
+        <div id="addressList"></div>
+        <button type="button" class="btn btn-ghost btn-block" style="margin-bottom:16px;" onclick="showAddAddressForm()">+ Nayi Address Add Karein</button>
+        <form id="addAddressForm" style="display:none;background:var(--bg);padding:12px;border-radius:10px;margin-bottom:16px;" onsubmit="return submitAddAddress(event)">
+          <div class="frow"><label for="addrLabel">Label</label><input type="text" id="addrLabel" placeholder="e.g. Home, Office" required></div>
+          <div class="frow"><label for="addrName">Naam</label><input type="text" id="addrName" required></div>
+          <div class="frow"><label for="addrPhone">Phone</label><input type="tel" id="addrPhone" required></div>
+          <div class="frow"><label for="addrFull">Pura Address</label><textarea id="addrFull" rows="2" required></textarea></div>
+          <button type="submit" class="btn btn-navy btn-block">Save Address</button>
+        </form>
+
         <p style="color:var(--muted);font-size:.85rem;margin:0 0 16px;">Aapke pasand kiye hue (liked) products:</p>
         <div class="like-grid" id="likedGrid"></div>
         <button type="button" class="btn btn-navy" style="margin-top:20px;" onclick="logoutUser()">Log Out</button>
@@ -467,6 +600,44 @@
         <button type="button" class="admin-tab" data-tab="orders" onclick="switchAdminTab('orders')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Orders</button>
         <button type="button" class="admin-tab" data-tab="bulk" onclick="switchAdminTab('bulk')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Bulk Upload</button>
         <button type="button" class="admin-tab" data-tab="analytics" onclick="switchAdminTab('analytics')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Analytics</button>
+        <button type="button" class="admin-tab" data-tab="coupons" onclick="switchAdminTab('coupons')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Coupons</button>
+        <button type="button" class="admin-tab" data-tab="banners" onclick="switchAdminTab('banners')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Banners</button>
+      </div>
+
+      <div id="adminPane-banners" style="display:none;">
+        <p style="margin:0 0 14px;color:var(--muted,#667);">Homepage ke top par dikhne wale hero banners manage karein.</p>
+        <form id="bannerAddForm" onsubmit="return submitAddBanner(event)" style="background:var(--bg);padding:14px;border-radius:10px;margin-bottom:18px;">
+          <div class="frow"><label for="bnImage">Banner Image</label><input type="file" id="bnImage" accept="image/*" required></div>
+          <div class="frow"><label for="bnTitle">Title (optional)</label><input type="text" id="bnTitle" placeholder="e.g. Eid Sale — Up to 30% Off"></div>
+          <div class="frow"><label for="bnSubtitle">Subtitle (optional)</label><input type="text" id="bnSubtitle" placeholder="e.g. Limited time only"></div>
+          <div class="frow"><label for="bnLink">Link (optional)</label><input type="text" id="bnLink" placeholder="#shop"></div>
+          <button type="submit" class="btn btn-navy btn-block" id="bnSubmitBtn">Banner Add Karein</button>
+          <div class="form-error" id="bannerAddError">Banner add nahi ho saka.</div>
+        </form>
+        <div id="adminBannersList"><p style="color:var(--muted);">Loading…</p></div>
+      </div>
+
+      <div id="adminPane-coupons" style="display:none;">
+        <p style="margin:0 0 14px;color:var(--muted,#667);">Discount coupons banayein jo customers checkout par apply kar sakte hain.</p>
+        <form id="couponAddForm" onsubmit="return submitAddCoupon(event)" style="background:var(--bg);padding:14px;border-radius:10px;margin-bottom:18px;">
+          <div class="fgrid2">
+            <div class="frow"><label for="cpCode">Coupon Code</label><input type="text" id="cpCode" style="text-transform:uppercase;" placeholder="e.g. EID20" required></div>
+            <div class="frow"><label for="cpType">Discount Type</label>
+              <select id="cpType"><option value="percent">Percent (%)</option><option value="fixed">Fixed Amount (Rs)</option></select>
+            </div>
+          </div>
+          <div class="fgrid2">
+            <div class="frow"><label for="cpValue">Value</label><input type="number" id="cpValue" min="1" required></div>
+            <div class="frow"><label for="cpMinOrder">Minimum Order (Rs, optional)</label><input type="number" id="cpMinOrder" min="0"></div>
+          </div>
+          <div class="fgrid2">
+            <div class="frow"><label for="cpLimit">Usage Limit (optional)</label><input type="number" id="cpLimit" min="1"></div>
+            <div class="frow"><label for="cpExpiry">Expiry Date (optional)</label><input type="date" id="cpExpiry"></div>
+          </div>
+          <button type="submit" class="btn btn-navy btn-block">Coupon Add Karein</button>
+          <div class="form-error" id="couponAddError">Coupon add nahi ho saka.</div>
+        </form>
+        <div id="adminCouponsList"><p style="color:var(--muted);">Loading…</p></div>
       </div>
 
       <div id="adminPane-bulk" style="display:none;">
