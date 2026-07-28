@@ -1495,7 +1495,7 @@ if(typeof firebase !== 'undefined' && firebase.auth){
    This ONLY works once you (1) enable Email/Password sign-in in Firebase
    Console > Authentication > Sign-in method, and (2) create one Firebase
    Auth user with this exact email as your admin account. */
-const ADMIN_EMAIL = 'qr9695242@gmail.com';
+const ADMIN_EMAIL = 'qraza2376@gmail.com';
 
 let adminSessionMemory = false; // in-memory fallback for browsers (e.g. WhatsApp's in-app browser) that block sessionStorage
 function isAdminLoggedIn(){
