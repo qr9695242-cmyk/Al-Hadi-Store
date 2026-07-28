@@ -507,6 +507,25 @@ function renderDetail(){
     '</div>';
   loadProductReviews(p.id);
   renderRelatedProducts(p);
+  injectProductSchema(p);
+}
+function injectProductSchema(p){
+  let tag = document.getElementById('productSchemaTag');
+  if(!tag){ tag = document.createElement('script'); tag.type='application/ld+json'; tag.id='productSchemaTag'; document.head.appendChild(tag); }
+  tag.textContent = JSON.stringify({
+    "@context":"https://schema.org",
+    "@type":"Product",
+    "name": p.name,
+    "image": firstImg(p),
+    "description": (p.desc||'').slice(0,300),
+    "offers": {
+      "@type":"Offer",
+      "priceCurrency":"PKR",
+      "price": p.price,
+      "availability": (p.stockStatus==='out') ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
+      "url": "https://alhadi.store/?product="+p.id
+    }
+  });
 }
 /* ---------- product comparison ---------- */
 function getCompareIds(){
@@ -656,6 +675,68 @@ function fillFromSavedAddress(id){
   document.getElementById('cname').value = a.fullName || '';
   document.getElementById('cphone').value = a.phone || '';
   document.getElementById('caddress').value = a.address || '';
+}
+
+/* ---------- order status notifications ---------- */
+let NOTIF_UNREAD = [];
+let notifListeners = [];
+function getSeenStatuses(){
+  try{ return JSON.parse(localStorage.getItem('ahs_seen_status')||'{}'); }catch(e){ return {}; }
+}
+function setSeenStatuses(obj){ localStorage.setItem('ahs_seen_status', JSON.stringify(obj)); }
+function watchMyOrdersForNotifications(){
+  if(typeof firebase === 'undefined' || !firebase.firestore) return;
+  notifListeners.forEach(u=>u());
+  notifListeners = [];
+  const ids = getMyOrderIds();
+  const seen = getSeenStatuses();
+  ids.forEach(function(id){
+    const unsub = firebase.firestore().collection('orders').doc(id).onSnapshot(function(doc){
+      if(!doc.exists) return;
+      const status = doc.data().status || 'pending';
+      const prev = seen[id];
+      if(prev === undefined){
+        seen[id] = status; setSeenStatuses(seen);
+      } else if(prev !== status){
+        NOTIF_UNREAD = NOTIF_UNREAD.filter(n=>n.id!==id);
+        NOTIF_UNREAD.unshift({ id: id, status: status, items: doc.data().orderItems||'' });
+        updateNotifBadge();
+      }
+    });
+    notifListeners.push(unsub);
+  });
+}
+function updateNotifBadge(){
+  const el = document.getElementById('notifCount');
+  if(!el) return;
+  if(NOTIF_UNREAD.length){ el.style.display='flex'; el.textContent = NOTIF_UNREAD.length; }
+  else { el.style.display='none'; }
+}
+function openNotifications(){
+  const box = document.getElementById('notifList');
+  if(!NOTIF_UNREAD.length){
+    box.innerHTML = '<p style="color:var(--muted);font-size:.85rem;padding:20px 4px;">Koi nayi update nahi hai. Jaise hi aapka order status update hoga, yahan dikhega.</p>';
+  } else {
+    box.innerHTML = NOTIF_UNREAD.map(n =>
+      '<div style="border-bottom:1px solid var(--line);padding:12px 0;">'+
+        '<b style="font-size:.85rem;">Order #'+n.id.slice(-6).toUpperCase()+'</b>'+
+        '<div style="font-size:.8rem;color:var(--muted);margin-top:2px;">Status: '+ORDER_STATUS_LABELS[n.status]+'</div>'+
+        '<div style="font-size:.78rem;color:var(--muted);margin-top:2px;">'+escapeHtml(n.items)+'</div>'+
+      '</div>'
+    ).join('');
+  }
+  document.getElementById('notifModal').classList.add('open');
+  document.body.style.overflow='hidden';
+  // mark all as seen
+  const seen = getSeenStatuses();
+  NOTIF_UNREAD.forEach(n=>{ seen[n.id] = n.status; });
+  setSeenStatuses(seen);
+  NOTIF_UNREAD = [];
+  updateNotifBadge();
+}
+function closeNotifications(){
+  document.getElementById('notifModal').classList.remove('open');
+  document.body.style.overflow='';
 }
 
 function openImageZoom(){
@@ -987,6 +1068,7 @@ function addMyOrderId(id){
     const ids = getMyOrderIds();
     if(ids.indexOf(id)===-1){ ids.unshift(id); localStorage.setItem('ahs_my_orders', JSON.stringify(ids.slice(0,50))); }
   }catch(e){}
+  watchMyOrdersForNotifications();
 }
 function saveOrderToFirestore(orderData){
   if(typeof firebase === 'undefined' || !firebase.firestore){ return; }
@@ -1101,7 +1183,7 @@ function toast(msg){
 
 /* ---------- misc ---------- */
 function scrollTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeCompareModal(); closeInvoice(); closeImageZoom(); closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeNotifications(); closeCompareModal(); closeInvoice(); closeImageZoom(); closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
 document.getElementById('year').textContent = new Date().getFullYear();
 
 /* ---------- account (Firebase Auth) + liked products ---------- */
@@ -1163,6 +1245,9 @@ function updateAccountUI(){
   if(btn) btn.classList.toggle('logged-in', !!currentUser);
 }
 
+function isMobileDevice(){
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
 function signInWithGoogle(){
   const err1 = document.getElementById('liError');
   const err2 = document.getElementById('suError');
@@ -1172,6 +1257,12 @@ function signInWithGoogle(){
     return;
   }
   const provider = new firebase.auth.GoogleAuthProvider();
+  if(isMobileDevice()){
+    // Mobile browsers (Safari/Chrome on iOS/Android) silently block popups,
+    // so we redirect to Google's login page instead and come back automatically.
+    firebase.auth().signInWithRedirect(provider);
+    return;
+  }
   firebase.auth().signInWithPopup(provider)
     .then(function(){
       closeAccount();
@@ -1182,6 +1273,18 @@ function signInWithGoogle(){
       if(err1){ err1.textContent = msg; err1.classList.add('show'); }
       toast(msg);
     });
+}
+// Completes sign-in after returning from Google's redirect page (mobile flow)
+if(typeof firebase !== 'undefined' && firebase.auth){
+  firebase.auth().getRedirectResult().then(function(result){
+    if(result && result.user){
+      toast('Login ho gaye — khush aamdeed!');
+    }
+  }).catch(function(error){
+    if(error && error.code && error.code !== 'auth/no-auth-event'){
+      toast(friendlyAuthError(error));
+    }
+  });
 }
 
 function submitLogin(e){
@@ -2561,3 +2664,4 @@ loadProducts();
 watchCustomProducts();
 trackEvent('page_view');
 loadHeroBanners();
+watchMyOrdersForNotifications();
