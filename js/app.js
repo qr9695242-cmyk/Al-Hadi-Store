@@ -811,8 +811,20 @@ async function loadProductReviews(productId){
   const box = document.getElementById('pdReviews');
   if(!box) return;
   try{
-    const snap = await firebase.firestore().collection('reviews').where('productId','==',productId).orderBy('createdAt','desc').limit(50).get();
+    // NOTE: deliberately NOT chaining .orderBy('createdAt','desc') onto this
+    // query. A where() + orderBy() on two different fields needs a Firestore
+    // "composite index" that has to be created once in the Firebase console;
+    // until that index exists, this call rejects with FAILED_PRECONDITION —
+    // which the catch below was silently swallowing, so reviews always
+    // showed "load nahi ho sake" even though the data/rules were fine.
+    // Sorting client-side avoids needing that index at all.
+    const snap = await firebase.firestore().collection('reviews').where('productId','==',productId).limit(50).get();
     const reviews = []; snap.forEach(d=>reviews.push(Object.assign({_id:d.id}, d.data())));
+    reviews.sort((a,b)=>{
+      const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return tb - ta;
+    });
     const avg = reviews.length ? (reviews.reduce((s,r)=>s+(r.rating||0),0)/reviews.length) : 0;
     REVIEW_PICK = 5;
     box.innerHTML =
@@ -838,6 +850,7 @@ async function loadProductReviews(productId){
       '</div>';
     renderStarPicker();
   }catch(err){
+    console.warn('loadProductReviews failed:', err);
     box.innerHTML = '<h4>Reviews &amp; Ratings</h4><p style="font-size:.8rem;color:var(--muted)">Reviews load nahi ho sake.</p>';
   }
 }
