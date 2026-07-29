@@ -1195,7 +1195,12 @@ function slugify(s){
 function shareProduct(){
   const p = PD.product; if(!p) return;
   const url = productShareURL(p.id);
-  const text = p.name+' — '+money(p.price)+'\n'+(p.desc?p.desc+'\n':'')+'\nAl Hadi Store: '+url;
+  // Caption WITHOUT the link — used when url is passed as its own share field,
+  // so the link never gets printed twice in the shared message.
+  const caption = p.name+' — '+money(p.price)+'\n'+(p.desc?p.desc+'\n':'');
+  // Caption WITH the link embedded — used only for the clipboard/prompt fallback,
+  // where there's no separate url field to rely on.
+  const textWithUrl = caption+'\nAl Hadi Store: '+url;
   const imgSrc = firstImg(p);
 
   // Try sharing WITH the product photo attached, so apps like WhatsApp show the picture inline.
@@ -1203,15 +1208,21 @@ function shareProduct(){
     try{
       const file = dataURLtoFile(imgSrc, slugify(p.name || p.id));
       if(navigator.canShare && navigator.canShare({files:[file]})){
-        navigator.share({title:p.name, text, files:[file]}).catch(()=>{});
+        // url isn't passed here: most share targets ignore `url` once files are
+        // attached, but WhatsApp/iOS can still tack it on as an extra line
+        // alongside the caption, printing the link twice.
+        navigator.share({title:p.name, text: textWithUrl, files:[file]}).catch(()=>{});
         return;
       }
     }catch(e){ /* fall through to text/link share below */ }
   }
-  // Fallback: text + link only (device/browser can't attach a file to a share)
-  if(navigator.share){ navigator.share({title:p.name, text, url}).catch(()=>{}); }
-  else if(navigator.clipboard){ navigator.clipboard.writeText(text).then(()=>toast('Copied — paste to share')).catch(()=>prompt('Copy to share:',text)); }
-  else { prompt('Copy to share:', text); }
+  // Fallback: text + link only (device/browser can't attach a file to a share).
+  // Pass the link ONLY via `url` (not embedded in `text` too) — the receiving
+  // app appends `url` on its own, so embedding it in `text` as well is what
+  // caused the link to show up twice with no product-specific preview.
+  if(navigator.share){ navigator.share({title:p.name, text: caption+'\nAl Hadi Store:', url}).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(textWithUrl).then(()=>toast('Copied — paste to share')).catch(()=>prompt('Copy to share:',textWithUrl)); }
+  else { prompt('Copy to share:', textWithUrl); }
 }
 
 /* ---------- toast ---------- */
