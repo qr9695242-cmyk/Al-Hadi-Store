@@ -485,7 +485,8 @@ function openProduct(id, fromURL){
   if(!p) return;
   trackEvent('product_view', id);
   trackRecentlyViewed(id);
-  PD = { product:p, index:0, size:(p.sizes&&p.sizes.length?p.sizes[0]:null), qty:1 };
+  PD = { product:p, index:0, size:(p.sizes&&p.sizes.length?p.sizes[0]:null), qty:1, shareFile:null, shareFileFor:null };
+  prefetchShareImage(p);
   renderDetail();
   document.getElementById('productModal').classList.add('open');
   document.body.style.overflow='hidden';
@@ -1192,6 +1193,46 @@ function dataURLtoFile(dataURL, baseName){
 function slugify(s){
   return String(s||'product').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,40) || 'product';
 }
+/* Fetches an ordinary image URL (relative path like "assets/products/x.webp",
+   or a Cloudinary/https URL) and turns it into a File — the async counterpart
+   of dataURLtoFile() above, for the (much more common) case where a product's
+   image ISN'T a base64 data: URI. */
+async function urlToFile(url, baseName){
+  const res = await fetch(url, {mode:'cors'});
+  if(!res.ok) throw new Error('image fetch failed: ' + res.status);
+  const blob = await res.blob();
+  const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg','jpg');
+  return new File([blob], baseName+'.'+ext, {type: blob.type || 'image/jpeg'});
+}
+/* THE FIX for "share sends the link, not the product photo":
+   shareProduct() must call navigator.share() synchronously inside the click
+   handler (see note above dataURLtoFile), so it can't itself await a fetch()
+   for products whose image is a normal URL rather than a data: URI — nearly
+   every product in products-data.js is exactly that (e.g. "assets/products/
+   prod-ishq-tshirt-1.webp"). The old code tried to run that URL through
+   dataURLtoFile() anyway, which threw, was silently swallowed by the catch,
+   and fell back to the link-only share — so WhatsApp/Instagram showed the
+   site's generic preview card instead of the product picture.
+   Fix: prefetch + convert the image to a File as soon as the product modal
+   opens (prefetchShareImage, called from openProduct), well before the user
+   taps Share. By share time the File is already sitting in memory, so
+   navigator.share() can still be called synchronously with it. */
+function prefetchShareImage(p){
+  const src = firstImg(p);
+  if(!src) return;
+  const baseName = slugify(p.name || p.id);
+  if(/^data:/i.test(src)){
+    // Already inline base64 (e.g. an admin-uploaded photo) — convert now, synchronously.
+    try{ PD.shareFile = dataURLtoFile(src, baseName); PD.shareFileFor = p.id; }catch(e){}
+    return;
+  }
+  let absUrl = src;
+  try{ absUrl = new URL(src, location.href).toString(); }catch(e){}
+  urlToFile(absUrl, baseName).then(function(file){
+    // Guard against the user having switched to a different product while this was loading.
+    if(PD.product && PD.product.id === p.id){ PD.shareFile = file; PD.shareFileFor = p.id; }
+  }).catch(function(){ /* leave shareFile null — shareProduct() falls back to link-only */ });
+}
 function shareProduct(){
   const p = PD.product; if(!p) return;
   const url = productShareURL(p.id);
@@ -1201,12 +1242,11 @@ function shareProduct(){
   // Caption WITH the link embedded — used only for the clipboard/prompt fallback,
   // where there's no separate url field to rely on.
   const textWithUrl = caption+'\nAl Hadi Store: '+url;
-  const imgSrc = firstImg(p);
+  const file = (PD.shareFileFor === p.id) ? PD.shareFile : null;
 
   // Try sharing WITH the product photo attached, so apps like WhatsApp show the picture inline.
-  if(navigator.share && imgSrc){
+  if(navigator.share && file){
     try{
-      const file = dataURLtoFile(imgSrc, slugify(p.name || p.id));
       if(navigator.canShare && navigator.canShare({files:[file]})){
         // url isn't passed here: most share targets ignore `url` once files are
         // attached, but WhatsApp/iOS can still tack it on as an extra line
@@ -1216,10 +1256,10 @@ function shareProduct(){
       }
     }catch(e){ /* fall through to text/link share below */ }
   }
-  // Fallback: text + link only (device/browser can't attach a file to a share).
-  // Pass the link ONLY via `url` (not embedded in `text` too) — the receiving
-  // app appends `url` on its own, so embedding it in `text` as well is what
-  // caused the link to show up twice with no product-specific preview.
+  // Fallback: text + link only (device/browser can't attach a file to a share,
+  // or the image hadn't finished prefetching yet). Pass the link ONLY via `url`
+  // (not embedded in `text` too) — the receiving app appends `url` on its own,
+  // so embedding it in `text` as well is what caused the link to show up twice.
   if(navigator.share){ navigator.share({title:p.name, text: caption+'\nAl Hadi Store:', url}).catch(()=>{}); }
   else if(navigator.clipboard){ navigator.clipboard.writeText(textWithUrl).then(()=>toast('Copied — paste to share')).catch(()=>prompt('Copy to share:',textWithUrl)); }
   else { prompt('Copy to share:', textWithUrl); }
