@@ -1,4 +1,18 @@
 {
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        { "type": "query", "key": "p" },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Pinterest|redditbot|SkypeUriPreview|vkShare|Googlebot|Bingbot).*"
+        }
+      ],
+      "destination": "/api/product-og"
+    }
+  ],
   "headers": [
     {
       "source": "/sitemap.xml",
