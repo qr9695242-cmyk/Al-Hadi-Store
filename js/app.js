@@ -2472,7 +2472,8 @@ function loadAdminOrders(){
       const rows = [];
       snap.forEach(function(doc){
         const data = doc.data();
-        if(!showCancelled && (data.status||'pending')==='cancelled') return;
+        const normalizedStatus = String(data.status||'pending').trim().toLowerCase();
+        if(!showCancelled && normalizedStatus==='cancelled') return;
         rows.push(adminOrderRowHtml(doc.id, data));
       });
       list.innerHTML = rows.length ? rows.join('') : '<p style="color:var(--muted);">Koi (active) order nahi hai. Cancelled orders dekhne ke liye upar wala checkbox tick karein.</p>';
@@ -2484,8 +2485,9 @@ function loadAdminOrders(){
     });
 }
 function adminOrderRowHtml(id, o){
+  const currentStatus = String(o.status||'pending').trim().toLowerCase();
   const statusOptions = Object.keys(ORDER_STATUS_LABELS).map(function(s){
-    return '<option value="'+s+'"'+((o.status||'pending')===s?' selected':'')+'>'+ORDER_STATUS_LABELS[s]+'</option>';
+    return '<option value="'+s+'"'+(currentStatus===s?' selected':'')+'>'+ORDER_STATUS_LABELS[s]+'</option>';
   }).join('');
   let flags = '';
   if(o.cancelRequested){
@@ -2523,7 +2525,8 @@ async function clearOrderFlag(id, field){
 }
 function updateOrderStatus(id, status){
   if(typeof firebase === 'undefined' || !firebase.firestore) return;
-  firebase.firestore().collection('orders').doc(id).update({status: status})
+  const normalized = String(status||'pending').trim().toLowerCase();
+  firebase.firestore().collection('orders').doc(id).update({status: normalized})
     .then(function(){ toast('Order status update ho gaya'); })
     .catch(function(){ toast('Status update fail ho gaya'); });
 }
