@@ -58,10 +58,19 @@ service cloud.firestore {
     }
 
     // Aggregate analytics counters (site visits, product views, add-to-cart
-    // counts) — no personal data, admin-only writes.
+    // counts) — no personal data. Full admin access always allowed, but
+    // trackEvent() in app.js also writes these same counters directly from
+    // anonymous/logged-out visitors (that's the whole point of visit
+    // tracking), so a plain isAdmin()-only rule would silently block every
+    // one of those writes. This lets anyone increment only the known
+    // counter fields — nothing else can be created or changed this way.
     match /analytics/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(
+        ['lastUpdated', 'totalPageViews', 'totalProductViews', 'productViews', 'totalAddToCart', 'productAddToCart']);
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+        ['lastUpdated', 'totalPageViews', 'totalProductViews', 'productViews', 'totalAddToCart', 'productAddToCart']);
     }
 
     // Homepage hero banners — public read, admin-only write.

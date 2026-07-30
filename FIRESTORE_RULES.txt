@@ -47,11 +47,21 @@ service cloud.firestore {
     }
 
     // Analytics summary (site visits, product views, add-to-cart counts) —
-    // ek hi document mein counters store hote hain, koi personal data nahi,
-    // lekin sirf admin panel hi inhe likhta hai.
+    // ek hi document mein counters store hote hain, koi personal data nahi.
+    // NOTE (fix): trackEvent() in app.js writes these same counters from
+    // anonymous visitors too, so a plain isAdmin()-only rule blocked every
+    // visitor's write with "Missing or insufficient permissions". Ab sirf
+    // known counter fields ko admin ke baghair bhi likhne diya gaya hai —
+    // baaki sab kuch (naye fields, doc delete waghera) abhi bhi admin-only
+    // hai. See firestore.rules at the project root — that's the file that
+    // actually gets deployed; this .txt is kept only as a readable copy.
     match /analytics/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(
+        ['lastUpdated','totalPageViews','totalProductViews','productViews','totalAddToCart','productAddToCart']);
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+        ['lastUpdated','totalPageViews','totalProductViews','productViews','totalAddToCart','productAddToCart']);
     }
 
     // Homepage hero banners — sab dekh sakte hain, sirf admin add/edit/
