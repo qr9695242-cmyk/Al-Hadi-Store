@@ -1364,6 +1364,11 @@ function isInAppBrowser(){
   return /FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok/i.test(navigator.userAgent);
 }
 function signInWithGoogle(){
+  // TEMP DIAGNOSTIC: confirms the tap reached this function at all, before
+  // anything else runs. If this toast doesn't appear when tapped, the
+  // problem is upstream (button wiring / a script error elsewhere stopping
+  // app.js from loading) rather than anything to do with Google/Firebase.
+  toast('Google button tap detected…');
   const err1 = document.getElementById('liError');
   const err2 = document.getElementById('suError');
   [err1,err2].forEach(function(e){ if(e) e.classList.remove('show'); });
