@@ -1338,6 +1338,15 @@ function setBtnLoading(btn, loading, loadingText){
 
 /* ---------- misc ---------- */
 function scrollTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
+/* Bottom-nav "Spotlight" tab: jump to whichever highlighted/deals section
+   is currently populated, falling back to the main product grid. */
+function goSpotlight(){
+  const ids = ['flashSaleSec','newArrivalsSec','bestSellersSec','shop'];
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el && el.style.display !== 'none'){ el.scrollIntoView({behavior:'smooth'}); return; }
+  }
+}
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeNotifications(); closeCompareModal(); closeInvoice(); closeImageZoom(); closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
 document.getElementById('year').textContent = new Date().getFullYear();
 

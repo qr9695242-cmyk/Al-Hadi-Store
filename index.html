@@ -59,7 +59,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 
 <!-- PWA: makes "Add to Home Screen" work like a real app -->
 <link rel="manifest" href="/manifest.json">
@@ -102,6 +102,9 @@
     </div>
 
     <div class="header-actions">
+      <button class="icon-btn" onclick="openAccount()" aria-label="My Favorites">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7.5-4.6-10-9.3C.5 8 2 4.5 5.7 4c2.2-.3 4 .9 5.3 2.8C12.3 4.9 14.1 3.7 16.3 4c3.7.5 5.2 4 3.7 7.7C19.5 16.4 12 21 12 21z"/></svg>
+      </button>
       <button class="icon-btn" onclick="openNotifications()" aria-label="Notifications">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="cart-count" id="notifCount" data-n="0" style="display:none;">0</span>
@@ -250,10 +253,11 @@
 <!-- ============ BOTTOM NAV (mobile) ============ -->
 <nav class="botnav">
   <div class="botnav-inner">
-    <button onclick="scrollTop()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>Home</button>
-    <button onclick="document.getElementById('shop').scrollIntoView({behavior:'smooth'})"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Categories</button>
-    <button onclick="openCart()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 4h2l2.4 12.2a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L22 8H6"/><circle cx="10" cy="21" r="1.2"/><circle cx="18" cy="21" r="1.2"/></svg><span class="bn-count" id="bnCount" data-n="0">0</span>Cart</button>
-    <button onclick="openAccount()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Account</button>
+    <button class="active" onclick="scrollTop()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>Home</button>
+    <button onclick="document.getElementById('shop').scrollIntoView({behavior:'smooth'})"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Category</button>
+    <button onclick="goSpotlight()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z"/></svg>Spotlight</button>
+    <button onclick="openOrdersModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-2 2-2-2-2 2-3-2V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6"/></svg>Orders</button>
+    <button onclick="openAccount()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</button>
   </div>
 </nav>
 
