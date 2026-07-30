@@ -2871,10 +2871,21 @@ async function fetchProductFromLink(){
   let data;
   try{
     const res = await fetch('/api/fetch-product?url=' + encodeURIComponent(url));
+    if(res.status === 404){
+      btn.disabled = false; btn.textContent = origText;
+      resultEl.innerHTML = '<p style="color:#c0392b;">Ye feature is site par kaam nahi karega — "/api/fetch-product" service nahi mili (404). Ye feature sirf Vercel par hosting hone par chalta hai; agar site Firebase Hosting ya kisi aur static host par hai to ye kaam nahi karega.</p>';
+      return;
+    }
+    const contentType = res.headers.get('content-type') || '';
+    if(!contentType.includes('application/json')){
+      btn.disabled = false; btn.textContent = origText;
+      resultEl.innerHTML = '<p style="color:#c0392b;">Server se sahi jawab nahi mila (JSON ki jagah kuch aur mila) — is site ki hosting par ye "Link Se Add" feature abhi kaam nahi karega. Vercel deployment check karein.</p>';
+      return;
+    }
     data = await res.json();
   }catch(e){
     btn.disabled = false; btn.textContent = origText;
-    resultEl.innerHTML = '<p style="color:#c0392b;">Detail nahi la saka — internet ya link check karein.</p>';
+    resultEl.innerHTML = '<p style="color:#c0392b;">Detail nahi la saka — internet ya link check karein. (Agar ye baar baar ho raha hai to ho sakta hai site ki hosting is feature ko support na kare.)</p>';
     return;
   }
   btn.disabled = false; btn.textContent = origText;

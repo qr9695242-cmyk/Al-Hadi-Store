@@ -653,14 +653,14 @@
       <span class="kicker">Admin Panel</span>
       <h2 style="margin:4px 0 12px;">Admin Panel</h2>
 
-      <div style="display:flex;gap:8px;margin-bottom:18px;">
-        <button type="button" class="admin-tab active" data-tab="products" onclick="switchAdminTab('products')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Products</button>
-        <button type="button" class="admin-tab" data-tab="orders" onclick="switchAdminTab('orders')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Orders</button>
-        <button type="button" class="admin-tab" data-tab="bulk" onclick="switchAdminTab('bulk')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Bulk Upload</button>
-        <button type="button" class="admin-tab" data-tab="fromlink" onclick="switchAdminTab('fromlink')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Link Se Add</button>
-        <button type="button" class="admin-tab" data-tab="analytics" onclick="switchAdminTab('analytics')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Analytics</button>
-        <button type="button" class="admin-tab" data-tab="coupons" onclick="switchAdminTab('coupons')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Coupons</button>
-        <button type="button" class="admin-tab" data-tab="banners" onclick="switchAdminTab('banners')" style="flex:1;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Banners</button>
+      <div style="display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px;">
+        <button type="button" class="admin-tab active" data-tab="products" onclick="switchAdminTab('products')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Products</button>
+        <button type="button" class="admin-tab" data-tab="orders" onclick="switchAdminTab('orders')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Orders</button>
+        <button type="button" class="admin-tab" data-tab="bulk" onclick="switchAdminTab('bulk')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Bulk Upload</button>
+        <button type="button" class="admin-tab" data-tab="fromlink" onclick="switchAdminTab('fromlink')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Link Se Add</button>
+        <button type="button" class="admin-tab" data-tab="analytics" onclick="switchAdminTab('analytics')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Analytics</button>
+        <button type="button" class="admin-tab" data-tab="coupons" onclick="switchAdminTab('coupons')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Coupons</button>
+        <button type="button" class="admin-tab" data-tab="banners" onclick="switchAdminTab('banners')" style="flex:0 0 auto;white-space:nowrap;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.15);background:#fff;font-weight:600;cursor:pointer;">Banners</button>
       </div>
 
       <div id="adminPane-banners" style="display:none;">
