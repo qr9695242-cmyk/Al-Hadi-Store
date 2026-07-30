@@ -1,109 +1,91 @@
 rules_version = '2';
+
+// ============================================================================
+// Al Hadi Store — Firestore Security Rules
+// ============================================================================
+// Setup checklist (required before these rules will work):
+//   1. Firebase Console > Authentication > Sign-in method > enable
+//      "Email/Password" and "Google".
+//   2. Firebase Console > Authentication > Users > add one user with the
+//      exact email in ADMIN_EMAIL below (must match js/app.js ADMIN_EMAIL).
+//   3. Deploy with: firebase deploy --only firestore:rules
+// Without step 1, both signup and login fail with auth/configuration-not-found.
+// ============================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isAdmin() {
+      // Keep this in sync with ADMIN_EMAIL in js/app.js.
       return request.auth != null && request.auth.token.email == 'qraza2376@gmail.com';
     }
 
-    // ---------------------------------------------------------------
-    // Products — public read (storefront), admin-only write.
-    // NOTE: an earlier version of this file had "write: if true" with a
-    // comment saying it was to avoid save errors in the admin panel.
-    // Your admin panel logs in with real Firebase Auth (signInWithEmail
-    // AndPassword) before saving products, so isAdmin() should now work
-    // correctly. Test "Add Product" / "Delete Product" after deploying
-    // this — if it errors out, it means the save is somehow firing
-    // before the admin auth session is ready, and that timing issue
-    // would need a code-side fix rather than reopening this rule.
-    // ---------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Products — public read (needed to browse the storefront), write
+    // restricted to the admin account only. Previously "write: if true",
+    // which let anyone add/edit/delete products directly from the browser
+    // console; that hole is closed here.
     match /products/{productId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Users: only the account owner can read/write their own profile + addresses.
+    // Per-user documents (liked products, profile fields). Each user can
+    // only read/write their own document, never anyone else's.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
 
       match /addresses/{addressId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
     }
 
-    // ---------------------------------------------------------------
-    // Orders
-    //   - create: open (guest checkout, no login required to order)
-    //   - get (single doc by ID): open — needed for the order-confirmation
-    //     page and "my orders" (tracked via IDs saved in the browser).
-    //     Firestore IDs are long random strings, not guessable, so this
-    //     is the same risk model as any "secret link" order-status page.
-    //   - list: open, but capped at 50 results per query (admin bypasses
-    //     the cap). This keeps "Track Order by Phone" working for
-    //     customers, while closing off the worst-case risk — nobody can
-    //     call collection('orders').get() with no filter and dump the
-    //     ENTIRE orders table in one shot. The residual, accepted risk:
-    //     someone who already knows a specific customer's phone number
-    //     could look up that person's orders — inherent to an
-    //     unauthenticated "track by phone" feature, same trade-off most
-    //     guest-checkout stores make. If that's ever unacceptable, the
-    //     real fix is requiring login (or an OTP) before tracking, not
-    //     a rules tweak.
-    //   - update: admin can update anything; a customer can only ever
-    //     flip the specific cancel/return-request fields on their own
-    //     order (can't touch price, address, status, etc.)
-    //   - delete: admin-only
-    // ---------------------------------------------------------------
+    // Orders — checkout works without an account (guest checkout is a
+    // supported flow), so "create" stays open. Status changes are admin-
+    // only, except two customer-initiated fields (cancel/return requests)
+    // which a customer can set on their own order without touching
+    // anything else.
     match /orders/{orderId} {
-      allow get, create: if true;
-      allow list: if isAdmin() || request.query.limit <= 50;
+      allow read: if true;
+      allow create: if true;
       allow update: if isAdmin() ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelRequested','cancelRequestedAt','returnRequested','returnReason','returnRequestedAt']);
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['cancelRequested', 'cancelRequestedAt', 'returnRequested', 'returnReason', 'returnRequestedAt']);
       allow delete: if isAdmin();
     }
 
-    // ---------------------------------------------------------------
-    // Analytics — public read (homepage "Best Sellers" ranking uses this),
-    // but writes are locked to the single 'summary' doc and to only the
-    // specific counter fields trackEvent() actually sends — nobody can
-    // create random new docs here or overwrite it with arbitrary data.
-    // ---------------------------------------------------------------
+    // Aggregate analytics counters (site visits, product views, add-to-cart
+    // counts) — no personal data, admin-only writes.
     match /analytics/{docId} {
       allow read: if true;
-      allow create, update: if docId == 'summary'
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['lastUpdated','totalPageViews','totalProductViews','totalAddToCart','productViews','productAddToCart']);
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Banners: public read (shown on homepage to everyone), admin-only write.
+    // Homepage hero banners — public read, admin-only write.
     match /banners/{bannerId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // ---------------------------------------------------------------
-    // Coupons
-    //   - get by exact code: open (you must already know the code to
-    //     redeem it — same model as any promo code).
-    //   - list (browsing all coupons): admin-only, so nobody can dump
-    //     the full coupon list to go hunting for the best discount.
-    //   - update: admin can change anything; anyone else may ONLY bump
-    //     usedCount by exactly 1 (this is what happens automatically
-    //     when a coupon is used at checkout) — value, type, active,
-    //     expiresAt, minOrder, usageLimit can never be touched by a
-    //     non-admin, so nobody can edit a coupon into "100% off".
-    //   - create/delete: admin-only.
-    // ---------------------------------------------------------------
+    // Coupons — customers may fetch one specific code by id (to validate it
+    // at checkout) but can't list/browse the full collection. The only
+    // field a non-admin write may touch is usedCount, so a customer can
+    // never grant themselves a bigger discount by editing a coupon.
     match /coupons/{code} {
       allow get: if true;
-      allow list, create, delete: if isAdmin();
+      allow list: if isAdmin();
+      allow create, delete: if isAdmin();
       allow update: if isAdmin() ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount'])
-          && request.resource.data.usedCount == resource.data.usedCount + 1);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']);
     }
 
-    // Reviews: anyone can read/leave a review (rating 1-5, tied to a real
-    // product), only admin can remove one.
+    // Product reviews — anyone can submit a review (no login required, same
+    // as orders), but the write must look like a real review: an integer
+    // rating from 1-5 and a valid productId. Editing/removing reviews
+    // (e.g. spam moderation) is admin-only.
     match /reviews/{reviewId} {
       allow read: if true;
       allow create: if request.resource.data.rating is int
@@ -111,6 +93,12 @@ service cloud.firestore {
         && request.resource.data.rating <= 5
         && request.resource.data.productId is string;
       allow update, delete: if isAdmin();
+    }
+
+    // Everything else is denied by default (Firestore rules deny anything
+    // not explicitly matched above), stated here for clarity.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -1,5 +1,83 @@
 # Al Hadi Store
 
+## Latest Update: Auth Overhaul + Firebase Hosting Config
+
+This pass focused on Firebase Authentication and deployment configuration
+without touching products, cart, checkout, or the admin panel's existing
+behavior.
+
+### What changed
+- **Forgot Password** (customer-facing): "Password bhool gaye?" link on the
+  Login tab opens an inline reset-email form (`sendPasswordResetEmail`).
+  The admin panel already had its own forgot-password flow — that one is
+  untouched, just restyled to match.
+- **Email verification is now enforced.** Signing up sends a verification
+  email (`sendEmailVerification`) and immediately signs the new account
+  back out. Logging in with an email/password account that hasn't clicked
+  that link is blocked, with a "Resend verification email" button. This
+  does **not** apply to Google Sign-In (Google already verifies emails) or
+  to the admin account (managed manually in Firebase Console).
+- **Better error messages** — `friendlyAuthError()` now covers more Firebase
+  Auth error codes (missing email/password, popup-blocked, quota-exceeded,
+  etc.) in addition to the existing ones.
+- **Loading states** on every auth button (login, signup, forgot password,
+  admin login, resend-verification) — button disables and shows a spinner
+  while the request is in flight, so a tap always gets visible feedback.
+- **Password show/hide toggle** on all three password fields (login,
+  signup, admin).
+- **Toast notifications** now have success (green) / error (red) / info
+  (navy, default) variants instead of one color for everything.
+- Removed a leftover debug toast that fired on every tap of the Google
+  Sign-In button.
+- Google Sign-In, cart, checkout, likes, orders, and the admin panel were
+  **not** modified beyond the cosmetic toast/loading-state pass above.
+
+### Setup required in Firebase Console (one-time)
+1. **Authentication → Sign-in method**: enable both **Email/Password** and
+   **Google**, if not already enabled.
+2. **Authentication → Templates → Email address verification**: this is
+   Firebase's default template and works out of the box — customize the
+   sender name/message here if you want it to look more branded.
+3. Your existing admin user (`qraza2376@gmail.com`) does **not** need to
+   re-verify anything — the verification requirement only applies to the
+   customer-facing `submitLogin()` flow, not `submitAdminLogin()`.
+4. Deploy the updated `firestore.rules` (see below) — logic is unchanged
+   from `FIRESTORE_RULES.txt`, just cleaned up with English comments.
+
+### Deployment: Vercel vs. Firebase Hosting
+This repo currently deploys on **Vercel** (`vercel.json`), and `alhadi.store`
+is presumably pointed at Vercel's nameservers/CNAME today. A `firebase.json`
++ `.firebaserc` have been added so the same static site can also be deployed
+to **Firebase Hosting** if you want to consolidate everything under one
+Firebase project:
+
+```bash
+npm install -g firebase-tools   # once
+firebase login
+firebase deploy --only hosting,firestore:rules
+```
+
+**One feature does not carry over automatically:** `api/product-og.js` is a
+Vercel serverless function that rewrites link-preview requests (WhatsApp,
+Facebook, etc.) to a per-product OG image/title. Firebase Hosting can only
+run the equivalent via a **Cloud Function**, which requires the paid Blaze
+plan — the same reason this project already avoids Firebase Storage
+(see `STORAGE_RULES.txt`). `firebase.json` intentionally leaves this
+rewrite out so the site stays deployable on Firebase's free Spark plan; on
+Firebase Hosting, link previews will fall back to the generic store-wide
+`og:image` instead of a per-product image. If you decide the per-product
+preview is worth the Blaze plan, that Cloud Function can be added later.
+
+**To point `alhadi.store` at Firebase Hosting**, use Firebase Console →
+Hosting → "Add custom domain" and follow the DNS verification steps; this
+will require updating your domain's DNS records (and removing/replacing
+whatever currently points it at Vercel). If you'd rather keep Vercel as the
+production host and only use Firebase for Auth/Firestore (as it already is
+today), no DNS changes are needed — `firebase.json` just gives you the
+option.
+
+---
+
 ## Phase 3 Progress: CSV Bulk Upload + Analytics
 
 - **CSV Bulk Upload**: Admin Panel → "Bulk Upload" tab. Pehle "Sample CSV

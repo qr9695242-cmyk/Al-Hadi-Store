@@ -1278,13 +1278,36 @@ function shareProduct(){
   else { prompt('Copy to share:', textWithUrl); }
 }
 
-/* ---------- toast ---------- */
+/* ---------- toast ----------
+   type: 'info' (default, navy) | 'success' (green) | 'error' (red) —
+   purely a background-color change via CSS class, no markup change needed. */
 let toastT;
-function toast(msg){
+function toast(msg, type){
   const t=document.getElementById('toast');
   document.getElementById('toastMsg').textContent=msg;
+  t.classList.remove('toast-success','toast-error','toast-info');
+  if(type==='success') t.classList.add('toast-success');
+  else if(type==='error') t.classList.add('toast-error');
   t.classList.add('show'); clearTimeout(toastT);
-  toastT=setTimeout(()=>t.classList.remove('show'),2200);
+  toastT=setTimeout(()=>t.classList.remove('show'), type==='error' ? 3200 : 2200);
+}
+
+/* Toggles a button into/out of a "loading" state: disables it, swaps its
+   label for a spinner + custom text, and restores the original label
+   afterwards. Used across every auth form so the person always gets
+   immediate feedback that their tap registered. */
+function setBtnLoading(btn, loading, loadingText){
+  if(!btn) return;
+  if(loading){
+    if(!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('btn-loading');
+    btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (loadingText || 'Please wait…');
+  } else {
+    btn.disabled = false;
+    btn.classList.remove('btn-loading');
+    if(btn.dataset.originalHtml){ btn.innerHTML = btn.dataset.originalHtml; }
+  }
 }
 
 /* ---------- misc ---------- */
@@ -1303,19 +1326,38 @@ function friendlyAuthError(error){
   const map = {
     'auth/email-already-in-use':'Ye email pehle se registered hai — Login karein.',
     'auth/invalid-email':'Email sahi format mein likhein.',
+    'auth/missing-email':'Email likhna zaroori hai.',
     'auth/weak-password':'Password kam az kam 6 characters ka hona chahiye.',
     'auth/user-not-found':'Ye email registered nahi hai — pehle account banayein.',
     'auth/wrong-password':'Password ghalat hai.',
     'auth/invalid-credential':'Email ya password ghalat hai.',
+    'auth/invalid-login-credentials':'Email ya password ghalat hai.',
+    'auth/missing-password':'Password likhna zaroori hai.',
     'auth/too-many-requests':'Bohot zyada koshishein — thori dair baad try karein.',
     'auth/network-request-failed':'Internet connection check karein.',
     'auth/unauthorized-domain':'Ye website domain Firebase mein authorize nahi hai. Firebase Console > Authentication > Settings > Authorized domains mein ye domain add karein.',
     'auth/operation-not-allowed':'Email/Password login abhi Firebase Console mein enable nahi hai. Authentication > Sign-in method mein Email/Password ko enable karein.',
     'auth/user-disabled':'Ye account disable kar diya gaya hai.',
-    'auth/requires-recent-login':'Security ke liye dobara login karein.'
+    'auth/requires-recent-login':'Security ke liye dobara login karein.',
+    'auth/popup-closed-by-user':'Popup band ho gayi — dobara koshish karein.',
+    'auth/cancelled-popup-request':'Pehli request abhi chal rahi thi — dobara tap karein.',
+    'auth/popup-blocked':'Browser ne popup block kar di — popups is site ke liye allow karein.',
+    'auth/quota-exceeded':'Abhi bohot zyada requests aa rahi hain — thori dair baad try karein.',
+    // Not a real Firebase Auth code — set locally when we sign an
+    // unverified user back out immediately after a successful password
+    // check, so the message + resend-link UI stay consistent everywhere.
+    'auth/email-not-verified':'Pehle apna email verify karein — hum ne aapko verification link bheja tha, apna inbox (aur spam folder) check karein.'
   };
   return (code && map[code]) || ('Kuch masla ho gaya, dobara koshish karein.' + (code ? ' (' + code + ')' : ''));
 }
+
+/* Holds the credentials of the last login attempt that failed because the
+   account's email wasn't verified yet, purely so "Resend verification
+   email" can silently re-authenticate and re-send without making the
+   person type their password again. Cleared right after use — the signed-
+   out User object from the failed attempt can't be trusted to still hold
+   a valid token, so we re-sign-in instead of reusing that object. */
+let unverifiedLoginAttempt = null;
 
 function openAccount(){
   document.getElementById('accountModal').classList.add('open');
@@ -1326,10 +1368,15 @@ function closeAccount(){
   document.getElementById('accountModal').classList.remove('open');
   document.body.style.overflow='';
   ['liError','suError'].forEach(id=>{ const e=document.getElementById(id); if(e){ e.classList.remove('show'); e.textContent=''; } });
+  hideForgotPassword();
+  const resendWrap = document.getElementById('liResendWrap');
+  if(resendWrap) resendWrap.style.display = 'none';
+  unverifiedLoginAttempt = null;
 }
 function switchAccTab(tab){
+  hideForgotPassword();
   document.querySelectorAll('.acc-tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
-  document.querySelectorAll('.acc-pane').forEach(p=>p.classList.toggle('show', p.id==='accPane-'+tab));
+  document.querySelectorAll('.acc-pane').forEach(p=>{ if(p.id!=='accPane-forgot') p.classList.toggle('show', p.id==='accPane-'+tab); });
 }
 
 function updateAccountUI(){
@@ -1364,11 +1411,6 @@ function isInAppBrowser(){
   return /FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok/i.test(navigator.userAgent);
 }
 function signInWithGoogle(){
-  // TEMP DIAGNOSTIC: confirms the tap reached this function at all, before
-  // anything else runs. If this toast doesn't appear when tapped, the
-  // problem is upstream (button wiring / a script error elsewhere stopping
-  // app.js from loading) rather than anything to do with Google/Firebase.
-  toast('Google button tap detected…');
   const err1 = document.getElementById('liError');
   const err2 = document.getElementById('suError');
   [err1,err2].forEach(function(e){ if(e) e.classList.remove('show'); });
@@ -1397,7 +1439,7 @@ function signInWithGoogle(){
     firebase.auth().signInWithPopup(provider)
       .then(function(){
         closeAccount();
-        toast('Login ho gaye — khush aamdeed!');
+        toast('Login ho gaye — khush aamdeed!', 'success');
       })
       .catch(function(error){
         const code = error && error.code;
@@ -1432,7 +1474,7 @@ try{
   if(typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length && firebase.auth){
     firebase.auth().getRedirectResult().then(function(result){
       if(result && result.user){
-        toast('Login ho gaye — khush aamdeed!');
+        toast('Login ho gaye — khush aamdeed!', 'success');
       } else {
         // Resolves with no user on EVERY normal page load too (not just after
         // a Google redirect), so this stays a quiet console log rather than a
@@ -1458,23 +1500,78 @@ function submitLogin(e){
   const email = document.getElementById('liEmail').value.trim();
   const pass = document.getElementById('liPass').value;
   const err = document.getElementById('liError');
+  const resendWrap = document.getElementById('liResendWrap');
+  const btn = document.getElementById('liSubmitBtn');
   err.classList.remove('show');
+  if(resendWrap) resendWrap.style.display = 'none';
   if(typeof firebase === 'undefined' || !firebase.auth){
     err.textContent = 'Login abhi kaam nahi kar raha — internet check karein.';
     err.classList.add('show');
     return false;
   }
+  setBtnLoading(btn, true, 'Login ho raha hai…');
   firebase.auth().signInWithEmailAndPassword(email, pass)
-    .then(function(){
+    .then(function(cred){
+      // Email/password accounts must verify their email before they can
+      // use the site (Google accounts are already verified by Google and
+      // never hit this function, so they're unaffected).
+      if(!cred.user.emailVerified){
+        unverifiedLoginAttempt = {email: email, pass: pass};
+        return firebase.auth().signOut().then(function(){
+          err.textContent = friendlyAuthError({code:'auth/email-not-verified'});
+          err.classList.add('show');
+          if(resendWrap) resendWrap.style.display = 'block';
+        });
+      }
+      unverifiedLoginAttempt = null;
       closeAccount();
       document.getElementById('loginForm').reset();
-      toast('Login ho gaye — khush aamdeed!');
+      toast('Login ho gaye — khush aamdeed!', 'success');
     })
     .catch(function(error){
       err.textContent = friendlyAuthError(error);
       err.classList.add('show');
-    });
+    })
+    .finally(function(){ setBtnLoading(btn, false); });
   return false;
+}
+
+/* Re-sends the verification email for a login attempt that was just
+   rejected for being unverified. Re-authenticates with the stored
+   credentials (rather than reusing the now-signed-out User object, whose
+   token can't be trusted), sends the email, then signs back out again. */
+function resendVerificationEmail(){
+  const err = document.getElementById('liError');
+  const resendWrap = document.getElementById('liResendWrap');
+  if(!unverifiedLoginAttempt){
+    toast('Pehle login try karein, phir resend karein', 'error');
+    return;
+  }
+  const resendBtn = document.getElementById('liResendBtn');
+  setBtnLoading(resendBtn, true, 'Bhej rahe hain…');
+  const attempt = unverifiedLoginAttempt;
+  let signedInUser = null;
+  firebase.auth().signInWithEmailAndPassword(attempt.email, attempt.pass)
+    .then(function(cred){
+      signedInUser = cred.user;
+      return cred.user.sendEmailVerification();
+    })
+    .then(function(){
+      return firebase.auth().signOut();
+    })
+    .then(function(){
+      toast('Verification email dobara bhej diya gaya — apna inbox check karein.', 'success');
+      if(resendWrap) resendWrap.style.display = 'none';
+      unverifiedLoginAttempt = null;
+    })
+    .catch(function(error){
+      // If credentials changed since the original attempt, sign whatever
+      // did get signed in back out before surfacing the error.
+      if(signedInUser){ firebase.auth().signOut().catch(function(){}); }
+      err.textContent = friendlyAuthError(error);
+      err.classList.add('show');
+    })
+    .finally(function(){ setBtnLoading(resendBtn, false); });
 }
 
 function submitSignup(e){
@@ -1482,6 +1579,7 @@ function submitSignup(e){
   const email = document.getElementById('suEmail').value.trim();
   const pass = document.getElementById('suPass').value;
   const err = document.getElementById('suError');
+  const btn = document.getElementById('suSubmitBtn');
   err.classList.remove('show');
   if(typeof firebase === 'undefined' || !firebase.auth){
     err.textContent = 'Account banana abhi kaam nahi kar raha — internet check karein.';
@@ -1493,16 +1591,30 @@ function submitSignup(e){
     err.classList.add('show');
     return false;
   }
+  setBtnLoading(btn, true, 'Account ban raha hai…');
   firebase.auth().createUserWithEmailAndPassword(email, pass)
+    .then(function(cred){
+      return cred.user.sendEmailVerification();
+    })
     .then(function(){
-      closeAccount();
+      // Sign the brand-new account back out immediately — per store policy
+      // an account can't be used to log in until its email is verified,
+      // so there's no reason to leave it signed in here either.
+      return firebase.auth().signOut();
+    })
+    .then(function(){
       document.getElementById('signupForm').reset();
-      toast('Account ban gaya — khush aamdeed!');
+      switchAccTab('login');
+      const liErr = document.getElementById('liError');
+      liErr.textContent = 'Account ban gaya! Hum ne ' + email + ' par ek verification link bheja hai — link par tap kar ke email verify karein, phir login karein.';
+      liErr.classList.add('show');
+      toast('Account ban gaya — email verify karein', 'success');
     })
     .catch(function(error){
       err.textContent = friendlyAuthError(error);
       err.classList.add('show');
-    });
+    })
+    .finally(function(){ setBtnLoading(btn, false); });
   return false;
 }
 
@@ -1510,8 +1622,75 @@ function logoutUser(){
   if(typeof firebase === 'undefined' || !firebase.auth) return;
   firebase.auth().signOut().then(function(){
     closeAccount();
-    toast('Aap logout ho gaye');
+    toast('Aap logout ho gaye', 'success');
   });
+}
+
+/* Toggles a password <input>'s type between password/text and swaps the
+   pressed state on its eye-icon button (aria-pressed drives the CSS that
+   switches between the "eye" and "eye-off" icon). */
+function togglePasswordVisibility(inputId, btn){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  if(btn) btn.setAttribute('aria-pressed', String(!showing));
+}
+
+/* ---------- forgot password (customer-facing) ---------- */
+function showForgotPassword(){
+  document.getElementById('accPane-login').style.display = 'none';
+  document.getElementById('accPane-forgot').classList.add('show');
+  document.getElementById('accPane-forgot').style.display = 'block';
+  const fpEmail = document.getElementById('fpEmail');
+  const liEmail = document.getElementById('liEmail');
+  if(fpEmail && liEmail && liEmail.value) fpEmail.value = liEmail.value;
+  document.querySelector('.acc-tabs').style.display = 'none';
+  document.querySelector('.google-btn').style.display = 'none';
+  document.querySelector('.or-divider').style.display = 'none';
+}
+function hideForgotPassword(){
+  document.getElementById('accPane-login').style.display = '';
+  document.getElementById('accPane-forgot').classList.remove('show');
+  document.getElementById('accPane-forgot').style.display = 'none';
+  document.querySelector('.acc-tabs').style.display = '';
+  document.querySelector('.google-btn').style.display = '';
+  document.querySelector('.or-divider').style.display = '';
+  const msg = document.getElementById('fpMsg');
+  if(msg){ msg.style.display = 'none'; msg.textContent = ''; }
+  const err = document.getElementById('fpError');
+  if(err){ err.classList.remove('show'); }
+}
+function submitForgotPassword(e){
+  e.preventDefault();
+  const email = document.getElementById('fpEmail').value.trim();
+  const err = document.getElementById('fpError');
+  const msg = document.getElementById('fpMsg');
+  const btn = document.getElementById('fpSubmitBtn');
+  err.classList.remove('show');
+  msg.style.display = 'none';
+  if(typeof firebase === 'undefined' || !firebase.auth){
+    err.textContent = 'Abhi kaam nahi kar raha — internet check karein.';
+    err.classList.add('show');
+    return false;
+  }
+  setBtnLoading(btn, true, 'Bhej rahe hain…');
+  firebase.auth().sendPasswordResetEmail(email)
+    .then(function(){
+      msg.textContent = 'Password reset link "' + email + '" par bhej diya gaya hai — apna inbox (aur spam folder) check karein.';
+      msg.style.display = 'block';
+      document.getElementById('forgotPasswordForm').reset();
+    })
+    .catch(function(error){
+      // Firebase intentionally returns the same UI-facing behavior whether
+      // or not the email exists (auth/user-not-found is still surfaced here
+      // as a normal error since this form is only reachable from a person
+      // who typed their own email, not a way to enumerate accounts at scale).
+      err.textContent = friendlyAuthError(error);
+      err.classList.add('show');
+    })
+    .finally(function(){ setBtnLoading(btn, false); });
+  return false;
 }
 
 /* Real-time listener on this user's liked-product ids, synced across every device they log into. */
@@ -1626,6 +1805,7 @@ function submitAdminLogin(e){
   const u = document.getElementById('adminUser').value.trim();
   const p = document.getElementById('adminPass').value;
   const errEl = document.getElementById('adminLoginError');
+  const btn = document.getElementById('adminLoginBtn');
   errEl.classList.remove('show');
   if(typeof firebase === 'undefined' || !firebase.auth){
     errEl.textContent = 'Admin login abhi kaam nahi kar raha — internet check karein.';
@@ -1636,6 +1816,7 @@ function submitAdminLogin(e){
   // Firebase Auth email+password sign-in below — only ADMIN_EMAIL's account
   // will ever be allowed to write products/orders per the Firestore rules.
   const email = (u.includes('@')) ? u : ADMIN_EMAIL;
+  setBtnLoading(btn, true, 'Logging in…');
   firebase.auth().signInWithEmailAndPassword(email, p)
     .then(function(cred){
       if(cred.user.email !== ADMIN_EMAIL){
@@ -1648,24 +1829,27 @@ function submitAdminLogin(e){
       try{ sessionStorage.setItem('ahs_admin','1'); }catch(e){}
       closeAdminLogin();
       openAdminPanel();
-      toast('Welcome, admin!');
+      toast('Welcome, admin!', 'success');
     })
     .catch(function(error){
       errEl.textContent = friendlyAuthError(error);
       errEl.classList.add('show');
-    });
+    })
+    .finally(function(){ setBtnLoading(btn, false); });
   return false;
 }
 
 function adminForgotPassword(){
   const msgEl = document.getElementById('adminForgotMsg');
   const errEl = document.getElementById('adminLoginError');
+  const btn = document.getElementById('adminForgotBtn');
   errEl.classList.remove('show');
   if(typeof firebase === 'undefined' || !firebase.auth){
     errEl.textContent = 'Abhi kaam nahi kar raha — internet check karein.';
     errEl.classList.add('show');
     return;
   }
+  setBtnLoading(btn, true, 'Bhej rahe hain…');
   // Sends a real reset link to ADMIN_EMAIL's Gmail inbox via Firebase —
   // no password is ever shown, stored, or emailed in plain text.
   firebase.auth().sendPasswordResetEmail(ADMIN_EMAIL)
@@ -1676,7 +1860,8 @@ function adminForgotPassword(){
     .catch(function(error){
       errEl.textContent = friendlyAuthError(error);
       errEl.classList.add('show');
-    });
+    })
+    .finally(function(){ setBtnLoading(btn, false); });
 }
 
 function adminLogout(){
