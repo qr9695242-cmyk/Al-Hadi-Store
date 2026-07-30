@@ -1354,6 +1354,15 @@ function updateAccountUI(){
 function isMobileDevice(){
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
+// Instagram / Facebook / Messenger / TikTok's built-in browser (opened when
+// someone taps a link inside those apps) is a "disallowed" embedded webview
+// as far as Google is concerned — Google refuses OAuth logins from it on
+// EVERY platform (iOS and Android alike), full stop, by design, not a bug
+// we can code around. Detecting it lets us tell the person what's actually
+// wrong instead of a confusing silent failure that looks device-specific.
+function isInAppBrowser(){
+  return /FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok/i.test(navigator.userAgent);
+}
 function signInWithGoogle(){
   const err1 = document.getElementById('liError');
   const err2 = document.getElementById('suError');
@@ -1363,28 +1372,50 @@ function signInWithGoogle(){
     window.showDebugError && window.showDebugError('Google Sign-In', 'Firebase SDK load nahi hua (firebase undefined)');
     return;
   }
+  if(isInAppBrowser()){
+    // Same message, same behavior, on iOS and Android alike — Google blocks
+    // this everywhere in these embedded browsers, so there's nothing to
+    // retry here; the fix is opening the link in the real browser.
+    toast('Ye link Instagram/Facebook ke andar khula hai — Google login yahan nahi chalta. Upar-right "•••" menu se "Open in Browser" / "Open in Safari" chunein.');
+    return;
+  }
   try{
     const provider = new firebase.auth.GoogleAuthProvider();
-    if(isMobileDevice()){
-      // Mobile browsers (Safari/Chrome on iOS/Android) silently block popups,
-      // so we redirect to Google's login page instead and come back automatically.
-      toast('Google par bhej rahe hain…');
-      firebase.auth().signInWithRedirect(provider).catch(function(error){
-        window.showDebugError && window.showDebugError('Google Redirect', (error&&error.code)+': '+(error&&error.message));
-        toast(friendlyAuthError(error));
-      });
-      return;
-    }
+    // Popup first — on EVERY device, including mobile. Redirect looks safer
+    // on paper, but on iOS Safari it silently fails even with a correctly
+    // authorized domain: the auth.firebaseapp.com handler page relies on
+    // cross-domain storage/cookies to hand the result back to this origin,
+    // and Safari's tracking-prevention blocks exactly that, with no error —
+    // getRedirectResult() just resolves with no user. Popup doesn't have
+    // that problem, and modern mobile Safari/Chrome allow popups just fine
+    // when triggered synchronously from a real tap, which this is.
     firebase.auth().signInWithPopup(provider)
       .then(function(){
         closeAccount();
         toast('Login ho gaye — khush aamdeed!');
       })
       .catch(function(error){
+        const code = error && error.code;
+        const popupFailedToOpen = code === 'auth/popup-blocked'
+          || code === 'auth/operation-not-supported-in-this-environment'
+          || code === 'auth/cancelled-popup-request';
+        if(popupFailedToOpen && isMobileDevice()){
+          // Only fall back to redirect when the popup genuinely couldn't
+          // open (e.g. an in-app browser like Instagram/Facebook's webview
+          // that disallows window.open). A user closing the popup on
+          // purpose (auth/popup-closed-by-user) should NOT trigger this —
+          // that just means they changed their mind.
+          toast('Google par bhej rahe hain…');
+          firebase.auth().signInWithRedirect(provider).catch(function(redirectError){
+            window.showDebugError && window.showDebugError('Google Redirect', (redirectError&&redirectError.code)+': '+(redirectError&&redirectError.message));
+            toast(friendlyAuthError(redirectError));
+          });
+          return;
+        }
         const msg = friendlyAuthError(error);
         if(err1){ err1.textContent = msg; err1.classList.add('show'); }
         toast(msg);
-        window.showDebugError && window.showDebugError('Google Popup', (error&&error.code)+': '+(error&&error.message));
+        window.showDebugError && window.showDebugError('Google Popup', code+': '+(error&&error.message));
       });
   }catch(error){
     window.showDebugError && window.showDebugError('Google Sign-In (sync)', (error&&error.message)||String(error));
@@ -1397,6 +1428,14 @@ try{
     firebase.auth().getRedirectResult().then(function(result){
       if(result && result.user){
         toast('Login ho gaye — khush aamdeed!');
+      } else {
+        // Resolves with no user on EVERY normal page load too (not just after
+        // a Google redirect), so this stays a quiet console log rather than a
+        // visible banner. If you land here right after tapping "Continue with
+        // Google" and see no user, the most likely cause is that this domain
+        // isn't in Firebase Console > Authentication > Settings > Authorized
+        // domains — Firebase/Google then silently drops the redirect result.
+        console.debug('getRedirectResult: no pending redirect / no user.');
       }
     }).catch(function(error){
       if(error && error.code && error.code !== 'auth/no-auth-event'){
