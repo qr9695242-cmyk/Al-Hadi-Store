@@ -2630,6 +2630,7 @@ function switchAdminTab(tab){
   document.getElementById('adminPane-products').style.display = (tab==='products') ? 'block' : 'none';
   document.getElementById('adminPane-orders').style.display = (tab==='orders') ? 'block' : 'none';
   document.getElementById('adminPane-bulk').style.display = (tab==='bulk') ? 'block' : 'none';
+  document.getElementById('adminPane-fromlink').style.display = (tab==='fromlink') ? 'block' : 'none';
   document.getElementById('adminPane-analytics').style.display = (tab==='analytics') ? 'block' : 'none';
   document.getElementById('adminPane-coupons').style.display = (tab==='coupons') ? 'block' : 'none';
   document.getElementById('adminPane-banners').style.display = (tab==='banners') ? 'block' : 'none';
@@ -2848,6 +2849,70 @@ function updateOrderStatus(id, status){
   firebase.firestore().collection('orders').doc(id).update({status: normalized})
     .then(function(){ toast('Order status update ho gaya'); })
     .catch(function(){ toast('Status update fail ho gaya'); });
+}
+
+/* ---------- admin: add product from a markaz (supplier) link ---------- */
+const LINK_ADD_PROFIT = 200; // Rs added on top of the markaz price automatically
+
+async function fetchProductFromLink(){
+  const urlInput = document.getElementById('flUrl');
+  const resultEl = document.getElementById('flResult');
+  const btn = document.getElementById('flFetchBtn');
+  const url = (urlInput.value || '').trim();
+
+  if(!url){ resultEl.innerHTML = '<p style="color:#c0392b;">Pehle markaz product ka link paste karein.</p>'; return; }
+  try{ new URL(url); }catch(e){ resultEl.innerHTML = '<p style="color:#c0392b;">Link sahi format mein nahi hai.</p>'; return; }
+
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = 'Tafseelat la rahe hain…';
+  resultEl.innerHTML = '<p style="color:var(--muted);">Markaz ki site se detail li ja rahi hai…</p>';
+
+  let data;
+  try{
+    const res = await fetch('/api/fetch-product?url=' + encodeURIComponent(url));
+    data = await res.json();
+  }catch(e){
+    btn.disabled = false; btn.textContent = origText;
+    resultEl.innerHTML = '<p style="color:#c0392b;">Detail nahi la saka — internet ya link check karein.</p>';
+    return;
+  }
+  btn.disabled = false; btn.textContent = origText;
+
+  if(!data || !data.ok){
+    resultEl.innerHTML = '<p style="color:#c0392b;">'+escapeHtml((data && data.message) || 'Is link se detail nahi mili — naam/price khud likh lein.')+'</p>';
+    return;
+  }
+
+  // Reset the add-product form to "new product" mode and prefill what we found.
+  const addForm = document.getElementById('addProductForm');
+  if(addForm) addForm.reset();
+  document.getElementById('apEditId').value = '';
+  if(typeof clearSizeChips === 'function') clearSizeChips();
+
+  if(data.name) document.getElementById('apName').value = data.name;
+  if(data.description) document.getElementById('apDesc').value = data.description;
+
+  const markazPrice = (typeof data.price === 'number') ? data.price : null;
+  if(markazPrice != null){
+    document.getElementById('apPrice').value = markazPrice + LINK_ADD_PROFIT;
+  }
+  document.getElementById('apDelivery').value = (data.deliveryCharge != null) ? data.deliveryCharge : DELIVERY_CHARGE;
+
+  let html = '<p style="font-weight:700;color:#1a7a3c;">Detail mil gayi — "Products" tab mein form bhar diya gaya hai.</p>';
+  if(markazPrice != null){
+    html += '<p style="margin-top:6px;">Markaz price: <strong>'+money(markazPrice)+'</strong> → Aap ka sale price (Rs '+LINK_ADD_PROFIT+' profit ke sath): <strong>'+money(markazPrice+LINK_ADD_PROFIT)+'</strong></p>';
+  } else {
+    html += '<p style="margin-top:6px;color:#c0392b;">Price nahi mil saki — khud likh lein.</p>';
+  }
+  html += '<p style="margin-top:6px;">Delivery charge: <strong>'+money(data.deliveryCharge != null ? data.deliveryCharge : DELIVERY_CHARGE)+'</strong>'+(data.deliveryCharge==null?' (default, markaz page par nahi mila)':' (markaz page se)')+'</p>';
+  html += '<p style="margin-top:10px;font-weight:600;">Ab "Products" tab mein jaa kar tasveer add karein aur "Product Add Karein" dabayein.</p>';
+  resultEl.innerHTML = html;
+
+  toast('Detail aa gayi — ab tasveer add karke product save karein');
+  switchAdminTab('products');
+  const imgField = document.getElementById('apImageUrls');
+  if(imgField){ imgField.scrollIntoView({behavior:'smooth', block:'center'}); imgField.focus(); }
 }
 
 /* ---------- admin: CSV bulk upload ---------- */
