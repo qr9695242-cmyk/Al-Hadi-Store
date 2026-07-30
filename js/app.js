@@ -2910,6 +2910,15 @@ async function fetchProductFromLink(){
   }
   document.getElementById('apDelivery').value = (data.deliveryCharge != null) ? data.deliveryCharge : DELIVERY_CHARGE;
 
+  // Agar markaz ke page se images mil gayi hain to unhe "Image URLs" field mein
+  // khud bhar dein — admin chahe to inhe hata/badal sakta hai ya apni taraf se
+  // upload bhi kar sakta hai.
+  const fetchedImages = Array.isArray(data.images) ? data.images.filter(Boolean) : [];
+  const imgUrlsField = document.getElementById('apImageUrls');
+  if(fetchedImages.length && imgUrlsField){
+    imgUrlsField.value = fetchedImages.join(', ');
+  }
+
   let html = '<p style="font-weight:700;color:#1a7a3c;">Detail mil gayi — "Products" tab mein form bhar diya gaya hai.</p>';
   if(markazPrice != null){
     html += '<p style="margin-top:6px;">Markaz price: <strong>'+money(markazPrice)+'</strong> → Aap ka sale price (Rs '+LINK_ADD_PROFIT+' profit ke sath): <strong>'+money(markazPrice+LINK_ADD_PROFIT)+'</strong></p>';
@@ -2917,10 +2926,15 @@ async function fetchProductFromLink(){
     html += '<p style="margin-top:6px;color:#c0392b;">Price nahi mil saki — khud likh lein.</p>';
   }
   html += '<p style="margin-top:6px;">Delivery charge: <strong>'+money(data.deliveryCharge != null ? data.deliveryCharge : DELIVERY_CHARGE)+'</strong>'+(data.deliveryCharge==null?' (default, markaz page par nahi mila)':' (markaz page se)')+'</p>';
-  html += '<p style="margin-top:10px;font-weight:600;">Ab "Products" tab mein jaa kar tasveer add karein aur "Product Add Karein" dabayein.</p>';
+  if(fetchedImages.length){
+    html += '<p style="margin-top:6px;">'+fetchedImages.length+' tasveer(en) bhi mil gayi hain aur "Image URLs" field mein bhar di gayi hain — chahein to inhe hata kar apni tasveerein daal sakte hain.</p>';
+  } else {
+    html += '<p style="margin-top:6px;color:#c0392b;">Is page se koi tasveer nahi mili — khud add ya upload karein.</p>';
+  }
+  html += '<p style="margin-top:10px;font-weight:600;">Ab "Products" tab mein jaa kar tasveerein check karein aur "Product Add Karein" dabayein.</p>';
   resultEl.innerHTML = html;
 
-  toast('Detail aa gayi — ab tasveer add karke product save karein');
+  toast(fetchedImages.length ? 'Detail aur tasveerein mil gayin — check karke product save karein' : 'Detail aa gayi — ab tasveer add karke product save karein');
   switchAdminTab('products');
   const imgField = document.getElementById('apImageUrls');
   if(imgField){ imgField.scrollIntoView({behavior:'smooth', block:'center'}); imgField.focus(); }
