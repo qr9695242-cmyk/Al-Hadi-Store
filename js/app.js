@@ -5,11 +5,26 @@
    ============================================================ */
 
 /* ---------- ON-SCREEN ERROR CATCHER ----------
-   Chhupi hui JS errors (jo phone par console mein bhi nahi dikhtin)
-   ab seedha ek chhoti si red patti mein screen ke neeche dikhengi,
-   taake bina computer/console ke bhi asal masla pata chal sake. */
+   Chhupi hui JS errors (jo phone par console mein bhi nahi dikhtin) ek
+   chhoti si red patti mein screen ke neeche dikhti hain — taake bina
+   computer/console ke bhi asal masla pata chal sake.
+   IMPORTANT: yeh sirf debug mode mein chalta hai (?debug=1 URL mein add
+   karein — ek dafa add karne se agli visits ke liye bhi yaad rehta hai,
+   hata-ne ke liye ?debug=0 lagayein) ya jab admin already logged in ho.
+   Pehle yeh HAR customer ko dikhta tha (jaise generic browser/extension
+   "Script error." bhi) — checkout ke baad invoice screen par bhi — jo
+   customers ko dara/confuse kar sakta tha bina koi kaam ki info diye. */
 (function(){
   let box;
+  function debugModeOn(){
+    try{
+      const params = new URLSearchParams(window.location.search);
+      if(params.has('debug')) sessionStorage.setItem('ahs_debug', params.get('debug')==='1' ? '1' : '0');
+      if(sessionStorage.getItem('ahs_debug') === '1') return true;
+    }catch(e){}
+    try{ if(sessionStorage.getItem('ahs_admin') === '1') return true; }catch(e){}
+    return false;
+  }
   function ensureBox(){
     if(box) return box;
     box = document.createElement('div');
@@ -24,6 +39,7 @@
     return box;
   }
   function showError(label, detail){
+    if(!debugModeOn()) return;
     const b = ensureBox();
     const line = document.createElement('div');
     line.style.cssText = 'border-top:1px solid rgba(255,255,255,.15);padding-top:6px;margin-top:6px;white-space:pre-wrap;word-break:break-word;';
@@ -32,14 +48,24 @@
     b.style.display = 'block';
   }
   window.addEventListener('error', function(e){
+    // A bare "Script error." with no filename means the error came from a
+    // cross-origin script without CORS headers (a third-party SDK or a
+    // browser extension) — the browser deliberately hides the real detail,
+    // so this line is always uninformative noise. Still logged to the
+    // console for developers; just not surfaced in the on-screen banner.
+    const isOpaqueCrossOrigin = (!e || !e.filename) && e && e.message === 'Script error.';
+    console.error('window error:', e && e.message, e && e.filename, e && e.lineno);
+    if(isOpaqueCrossOrigin) return;
     showError('JS Error', (e && e.message ? e.message : 'Unknown') + (e && e.filename ? (' @ ' + e.filename.split('/').pop() + ':' + e.lineno) : ''));
   });
   window.addEventListener('unhandledrejection', function(e){
     const reason = e && e.reason;
     const msg = (reason && reason.message) ? reason.message : (reason && reason.code) ? reason.code : String(reason);
+    console.error('unhandled rejection:', msg);
     showError('Promise Error', msg);
   });
   window.addEventListener('securitypolicyviolation', function(e){
+    console.error('CSP violation:', e.violatedDirective, e.blockedURI);
     showError('CSP Blocked', (e.violatedDirective||'')+' — '+(e.blockedURI||''));
   });
   window.showDebugError = showError;
