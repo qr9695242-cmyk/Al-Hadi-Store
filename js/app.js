@@ -2398,7 +2398,7 @@ function trackOrdersByPhone(){
     return;
   }
   list.innerHTML = '<p style="color:var(--muted);font-size:13px;">Dhoond rahe hain…</p>';
-  firebase.firestore().collection('orders').where('phone', '==', phone).get()
+  firebase.firestore().collection('orders').where('phone', '==', phone).limit(50).get()
     .then(function(snap){
       if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Is phone number se koi order nahi mila.</p>'; return; }
       const cards = [];
