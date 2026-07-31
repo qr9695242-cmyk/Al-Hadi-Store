@@ -1337,7 +1337,7 @@ function setBtnLoading(btn, loading, loadingText){
 }
 
 /* ---------- misc ---------- */
-function scrollTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
+function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
 /* Bottom-nav "Spotlight" tab: jump to whichever highlighted/deals section
    is currently populated, falling back to the main product grid. */
 function goSpotlight(){
