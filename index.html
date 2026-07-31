@@ -286,6 +286,17 @@
   </div>
 </div>
 
+<!-- ============ IMAGE ZOOM VIEWER ============ -->
+<div class="pd-zoom-overlay" id="pdZoomOverlay">
+  <button class="pd-zoom-close" onclick="closeZoom()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <button class="pd-zoom-nav prev" id="pdZoomPrev" onclick="zoomSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button class="pd-zoom-nav next" id="pdZoomNext" onclick="zoomSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>
+  <div class="pd-zoom-stage" id="pdZoomStage">
+    <img id="pdZoomImg" src="" alt="">
+  </div>
+  <div class="pd-zoom-caption">Pinch ya double-tap se zoom karein · zoom hone par ghaseet kar dekhein</div>
+</div>
+
 <!-- ============ NOTIFICATIONS MODAL ============ -->
 <div class="modal" id="notifModal">
   <div class="modal-bg" onclick="closeNotifications()"></div>
@@ -788,6 +799,8 @@
           <button type="button" class="size-chip" data-size="L" onclick="toggleSizeChip(this)">L</button>
           <button type="button" class="size-chip" data-size="XL" onclick="toggleSizeChip(this)">XL</button>
           <button type="button" class="size-chip" data-size="XXL" onclick="toggleSizeChip(this)">XXL</button>
+          <button type="button" class="size-chip" data-size="Unstitched" onclick="toggleSizeChip(this)">Unstitched</button>
+          <button type="button" class="size-chip" data-size="Standard" onclick="toggleSizeChip(this)">Standard</button>
         </div>
 
         <span class="size-group-label">Juti ke size (tap karein):</span>
