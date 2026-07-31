@@ -707,12 +707,12 @@
       </div>
 
       <div id="adminPane-fromlink" style="display:none;">
-        <p style="margin:0 0 14px;color:var(--muted,#667);">Markaz (supplier) wali website se product ka link paste karein — naam, description aur price khud aa jayenge. Price mein khud-b-khud Rs 200 profit add ho jata hai, aur delivery charge bhi markaz ke page se pata chalein to woh set ho jata hai (warna default Rs 200 rehta hai). <strong>Tasveer aapko khud add karni hogi.</strong></p>
+        <p style="margin:0 0 14px;color:var(--muted,#667);">Markaz (supplier) wali website se ek ya kai products ke links paste karein — <strong>har link naye line par</strong> (ek dafa mein 20 tak links chalte hain). Har link ke liye naam, description, price aur (agar mil jayein to) tasveerein khud aa jayengi aur product seedha add ho jayega. Price mein khud-b-khud Rs 400 profit add ho jata hai, aur delivery charge bhi markaz ke page se mil jaye to woh set ho jata hai (warna default Rs 200 rehta hai). <strong>Jis link ki tasveer na mile us product ko report mein dikha diya jayega taake aap use Products tab se khud tasveer ke sath add kar lein.</strong></p>
         <div class="frow">
-          <label for="flUrl">Markaz Product Link</label>
-          <input type="url" id="flUrl" placeholder="https://markaz-site.com/product/...">
+          <label for="flUrls">Markaz Product Links (ek line mein ek link)</label>
+          <textarea id="flUrls" rows="8" placeholder="https://markaz-site.com/product/...&#10;https://markaz-site.com/product/...&#10;https://markaz-site.com/product/..."></textarea>
         </div>
-        <button type="button" class="btn btn-gold btn-block" style="margin-top:10px;" id="flFetchBtn" onclick="fetchProductFromLink()">Tafseelat Laayein</button>
+        <button type="button" class="btn btn-gold btn-block" style="margin-top:10px;" id="flFetchBtn" onclick="handleMultiLinkAdd()">Sab Links Se Products Add Karein</button>
         <div id="flResult" style="margin-top:14px;font-size:14px;"></div>
       </div>
 

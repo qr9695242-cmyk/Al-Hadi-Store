@@ -2972,93 +2972,177 @@ function updateOrderStatus(id, status){
     .catch(function(){ toast('Status update fail ho gaya'); });
 }
 
-/* ---------- admin: add product from a markaz (supplier) link ---------- */
-const LINK_ADD_PROFIT = 200; // Rs added on top of the markaz price automatically
+/* ---------- admin: add products from markaz (supplier) links ---------- */
+const LINK_ADD_PROFIT = 400; // Rs added on top of the markaz price automatically
+const MULTI_LINK_MAX = 30; // safety cap on how many links can be processed in one go
+const MULTI_LINK_CONCURRENCY = 4; // how many links are fetched in parallel
 
-async function fetchProductFromLink(){
-  const urlInput = document.getElementById('flUrl');
+/* Runs `worker` over `items` with at most `limit` running at once, and
+   returns once every item has been processed (order of completion doesn't
+   matter here — each worker reports its own result as it finishes). */
+async function runWithConcurrency(items, limit, worker){
+  let idx = 0;
+  async function lane(){
+    while(idx < items.length){
+      const cur = idx++;
+      await worker(items[cur], cur);
+    }
+  }
+  const lanes = Array.from({length: Math.max(1, Math.min(limit, items.length))}, lane);
+  await Promise.all(lanes);
+}
+
+/* Calls the /api/fetch-product endpoint for one markaz link. Throws a
+   labelled error for the caller to turn into a friendly message. */
+async function fetchMarkazProductData(url){
+  let res;
+  try{
+    res = await fetch('/api/fetch-product?url=' + encodeURIComponent(url));
+  }catch(e){
+    throw new Error('NETWORK');
+  }
+  if(res.status === 404) throw new Error('FEATURE_404');
+  const contentType = res.headers.get('content-type') || '';
+  if(!contentType.includes('application/json')) throw new Error('BAD_RESPONSE');
+  return await res.json();
+}
+
+/* Splits the textarea into a clean, deduped list of links — admins can put
+   one link per line (recommended) or separate them with commas/semicolons. */
+function parseMultiLinkInput(raw){
+  const parts = String(raw||'').split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+async function handleMultiLinkAdd(){
+  const textEl = document.getElementById('flUrls');
   const resultEl = document.getElementById('flResult');
   const btn = document.getElementById('flFetchBtn');
-  const url = (urlInput.value || '').trim();
 
-  if(!url){ resultEl.innerHTML = '<p style="color:#c0392b;">Pehle markaz product ka link paste karein.</p>'; return; }
-  try{ new URL(url); }catch(e){ resultEl.innerHTML = '<p style="color:#c0392b;">Link sahi format mein nahi hai.</p>'; return; }
+  let urls = parseMultiLinkInput(textEl.value);
+  if(!urls.length){ resultEl.innerHTML = '<p style="color:#c0392b;">Kam az kam ek markaz product link paste karein (ek line mein ek link).</p>'; return; }
+
+  let trimmedNotice = '';
+  if(urls.length > MULTI_LINK_MAX){
+    trimmedNotice = '<p style="color:#c0392b;">Ek dafa mein zyada se zyada '+MULTI_LINK_MAX+' links chalte hain — pehle '+MULTI_LINK_MAX+' process kiye ja rahe hain, baaki links dobara paste kar ke chala lein.</p>';
+    urls = urls.slice(0, MULTI_LINK_MAX);
+  }
+
+  const invalid = [];
+  const valid = [];
+  urls.forEach(u=>{
+    try{ new URL(u); valid.push(u); }catch(e){ invalid.push(u); }
+  });
+
+  if(!valid.length){
+    resultEl.innerHTML = trimmedNotice + '<p style="color:#c0392b;">Koi bhi link sahi format mein nahi hai.</p>';
+    return;
+  }
 
   btn.disabled = true;
   const origText = btn.textContent;
-  btn.textContent = 'Tafseelat la rahe hain…';
-  resultEl.innerHTML = '<p style="color:var(--muted);">Markaz ki site se detail li ja rahi hai…</p>';
+  btn.textContent = 'Products add ho rahe hain…';
 
-  let data;
-  try{
-    const res = await fetch('/api/fetch-product?url=' + encodeURIComponent(url));
-    if(res.status === 404){
-      btn.disabled = false; btn.textContent = origText;
-      resultEl.innerHTML = '<p style="color:#c0392b;">Ye feature is site par kaam nahi karega — "/api/fetch-product" service nahi mili (404). Ye feature sirf Vercel par hosting hone par chalta hai; agar site Firebase Hosting ya kisi aur static host par hai to ye kaam nahi karega.</p>';
-      return;
-    }
-    const contentType = res.headers.get('content-type') || '';
-    if(!contentType.includes('application/json')){
-      btn.disabled = false; btn.textContent = origText;
-      resultEl.innerHTML = '<p style="color:#c0392b;">Server se sahi jawab nahi mila (JSON ki jagah kuch aur mila) — is site ki hosting par ye "Link Se Add" feature abhi kaam nahi karega. Vercel deployment check karein.</p>';
-      return;
-    }
-    data = await res.json();
-  }catch(e){
-    btn.disabled = false; btn.textContent = origText;
-    resultEl.innerHTML = '<p style="color:#c0392b;">Detail nahi la saka — internet ya link check karein. (Agar ye baar baar ho raha hai to ho sakta hai site ki hosting is feature ko support na kare.)</p>';
-    return;
+  const total = valid.length;
+  let done = 0;
+  function updateProgress(){
+    resultEl.innerHTML = trimmedNotice + '<p style="color:var(--muted);">'+done+' / '+total+' links process ho chuke hain…</p>';
   }
+  updateProgress();
+
+  const successes = []; // {name, price}
+  const failures = [];  // {url, reason}
+
+  await runWithConcurrency(valid, MULTI_LINK_CONCURRENCY, async (url, i)=>{
+    try{
+      const data = await fetchMarkazProductData(url);
+      if(!data || !data.ok){
+        failures.push({url, reason: (data && data.message) || 'Is link se detail nahi mili.'});
+        return;
+      }
+
+      const name = data.name || null;
+      const markazPrice = (typeof data.price === 'number') ? data.price : null;
+      if(!name || markazPrice == null){
+        failures.push({url, reason: 'Naam ya price nahi mili — is link ko Products tab se khud bhar kar add karein.'});
+        return;
+      }
+
+      const fetchedImages = (Array.isArray(data.images) ? data.images.filter(Boolean) : []);
+      if(!fetchedImages.length){
+        failures.push({url, reason: '"'+name+'" ki koi tasveer nahi mili — Products tab mein jaa kar is naam se tasveer ke sath khud add karein.'});
+        return;
+      }
+
+      const price = markazPrice + LINK_ADD_PROFIT;
+      const productId = 'admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '_' + i;
+      const product = {
+        id: productId,
+        category: 'other',
+        name: name,
+        price: price,
+        oldPrice: null,
+        desc: data.description || null,
+        sizes: ['Standard'],
+        sizeLabel: 'Size',
+        colors: [],
+        videoUrl: null,
+        stockStatus: 'in',
+        stockQty: null,
+        hidden: false,
+        deliveryCharge: (data.deliveryCharge != null) ? data.deliveryCharge : DELIVERY_CHARGE,
+        flashSale: false,
+        details: [],
+        note: null,
+        productCode: null,
+        images: fetchedImages.map(u=>({src:u, alt:name})),
+        badge: 'New',
+        addedByAdmin: true
+      };
+
+      const saved = await saveCustomProduct(product);
+      ALL_PRODUCTS = ALL_PRODUCTS.filter(p=>p.id !== saved.id).concat([saved]);
+      successes.push({name, price});
+    }catch(e){
+      const reason = (e && e.message === 'FEATURE_404')
+        ? '"Link Se Add" feature is hosting par kaam nahi karta (404) — Vercel deployment check karein.'
+        : (e && e.message === 'BAD_RESPONSE')
+          ? 'Server se sahi jawab nahi mila.'
+          : 'Detail nahi la saka — internet ya link check karein.';
+      failures.push({url, reason});
+    }finally{
+      done++; updateProgress();
+    }
+  });
+
   btn.disabled = false; btn.textContent = origText;
 
-  if(!data || !data.ok){
-    resultEl.innerHTML = '<p style="color:#c0392b;">'+escapeHtml((data && data.message) || 'Is link se detail nahi mili — naam/price khud likh lein.')+'</p>';
-    return;
+  if(successes.length){
+    buildCategories();
+    renderProducts();
+    renderAdminProductList();
   }
 
-  // Reset the add-product form to "new product" mode and prefill what we found.
-  const addForm = document.getElementById('addProductForm');
-  if(addForm) addForm.reset();
-  document.getElementById('apEditId').value = '';
-  if(typeof clearSizeChips === 'function') clearSizeChips();
-
-  if(data.name) document.getElementById('apName').value = data.name;
-  if(data.description) document.getElementById('apDesc').value = data.description;
-
-  const markazPrice = (typeof data.price === 'number') ? data.price : null;
-  if(markazPrice != null){
-    document.getElementById('apPrice').value = markazPrice + LINK_ADD_PROFIT;
+  let html = trimmedNotice;
+  html += '<p style="font-weight:700;color:'+(successes.length?'#1a7a3c':'#c0392b')+';">'+successes.length+' products add ho gaye'+(failures.length?', '+failures.length+' fail hue':'')+'.</p>';
+  if(successes.length){
+    html += '<ul style="font-size:13px;margin-top:6px;padding-left:18px;">'+successes.map(s=>'<li>'+escapeHtml(s.name)+' — '+money(s.price)+'</li>').join('')+'</ul>';
   }
-  document.getElementById('apDelivery').value = (data.deliveryCharge != null) ? data.deliveryCharge : DELIVERY_CHARGE;
-
-  // Agar markaz ke page se images mil gayi hain to unhe "Image URLs" field mein
-  // khud bhar dein — admin chahe to inhe hata/badal sakta hai ya apni taraf se
-  // upload bhi kar sakta hai.
-  const fetchedImages = Array.isArray(data.images) ? data.images.filter(Boolean) : [];
-  const imgUrlsField = document.getElementById('apImageUrls');
-  if(fetchedImages.length && imgUrlsField){
-    imgUrlsField.value = fetchedImages.join(', ');
+  if(failures.length){
+    html += '<p style="margin-top:10px;font-weight:600;color:#c0392b;">Ye links fail hue:</p>';
+    html += '<ul style="color:#c0392b;font-size:13px;margin-top:4px;padding-left:18px;word-break:break-all;">'+failures.slice(0,20).map(f=>'<li>'+escapeHtml(f.url)+' — '+escapeHtml(f.reason)+'</li>').join('')+'</ul>';
+    if(failures.length>20) html += '<p style="color:#c0392b;font-size:13px;">...aur '+(failures.length-20)+' fail hue links.</p>';
   }
-
-  let html = '<p style="font-weight:700;color:#1a7a3c;">Detail mil gayi — "Products" tab mein form bhar diya gaya hai.</p>';
-  if(markazPrice != null){
-    html += '<p style="margin-top:6px;">Markaz price: <strong>'+money(markazPrice)+'</strong> → Aap ka sale price (Rs '+LINK_ADD_PROFIT+' profit ke sath): <strong>'+money(markazPrice+LINK_ADD_PROFIT)+'</strong></p>';
-  } else {
-    html += '<p style="margin-top:6px;color:#c0392b;">Price nahi mil saki — khud likh lein.</p>';
+  if(invalid.length){
+    html += '<p style="margin-top:10px;font-weight:600;color:#c0392b;">Ye sahi link format mein nahi thay, ignore ho gaye:</p>';
+    html += '<ul style="color:#c0392b;font-size:13px;margin-top:4px;padding-left:18px;word-break:break-all;">'+invalid.slice(0,20).map(u=>'<li>'+escapeHtml(u)+'</li>').join('')+'</ul>';
   }
-  html += '<p style="margin-top:6px;">Delivery charge: <strong>'+money(data.deliveryCharge != null ? data.deliveryCharge : DELIVERY_CHARGE)+'</strong>'+(data.deliveryCharge==null?' (default, markaz page par nahi mila)':' (markaz page se)')+'</p>';
-  if(fetchedImages.length){
-    html += '<p style="margin-top:6px;">'+fetchedImages.length+' tasveer(en) bhi mil gayi hain aur "Image URLs" field mein bhar di gayi hain — chahein to inhe hata kar apni tasveerein daal sakte hain.</p>';
-  } else {
-    html += '<p style="margin-top:6px;color:#c0392b;">Is page se koi tasveer nahi mili — khud add ya upload karein.</p>';
-  }
-  html += '<p style="margin-top:10px;font-weight:600;">Ab "Products" tab mein jaa kar tasveerein check karein aur "Product Add Karein" dabayein.</p>';
   resultEl.innerHTML = html;
 
-  toast(fetchedImages.length ? 'Detail aur tasveerein mil gayin — check karke product save karein' : 'Detail aa gayi — ab tasveer add karke product save karein');
-  switchAdminTab('products');
-  const imgField = document.getElementById('apImageUrls');
-  if(imgField){ imgField.scrollIntoView({behavior:'smooth', block:'center'}); imgField.focus(); }
+  if(successes.length){
+    toast(successes.length+' products add ho gaye');
+    textEl.value = failures.length ? failures.map(f=>f.url).join('\n') : '';
+  }
 }
 
 /* ---------- admin: CSV bulk upload ---------- */
