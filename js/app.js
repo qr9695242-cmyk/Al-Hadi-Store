@@ -541,8 +541,7 @@ function renderDetail(){
   el.innerHTML =
     '<div class="pd-gallery">'+
       '<div class="pd-main">'+
-        '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'" onclick="openImageZoom()" style="cursor:zoom-in;">'+
-        '<button class="pd-zoom-btn" onclick="openImageZoom()" aria-label="Zoom image"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/></svg></button>'+
+        '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'">'+
         (imgs.length>1 ? '<button class="pd-nav prev" onclick="pdSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>' : '')+
         (imgs.length>1 ? '<button class="pd-nav next" onclick="pdSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>' : '')+
       '</div>'+
@@ -808,17 +807,6 @@ function closeNotifications(){
   document.body.style.overflow='';
 }
 
-function openImageZoom(){
-  const img = document.getElementById('pdMainImg');
-  if(!img || !img.src) return;
-  document.getElementById('zoomImg').src = img.src;
-  document.getElementById('imageZoomModal').classList.add('open');
-  document.body.style.overflow='hidden';
-}
-function closeImageZoom(){
-  document.getElementById('imageZoomModal').classList.remove('open');
-  document.body.style.overflow='';
-}
 function renderRelatedProducts(p){
   const box = document.getElementById('pdRelated'); if(!box) return;
   const related = ALL_PRODUCTS.filter(x => !x.hidden && !x.deleted && x.id!==p.id && catKey(x.category)===catKey(p.category)).slice(0,8);
@@ -1347,7 +1335,7 @@ function goSpotlight(){
     if(el && el.style.display !== 'none'){ el.scrollIntoView({behavior:'smooth'}); return; }
   }
 }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeNotifications(); closeCompareModal(); closeInvoice(); closeImageZoom(); closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeNotifications(); closeCompareModal(); closeInvoice(); closeProduct(); closeCheckout(); closeCart(); closeAdminLogin(); closeAdminPanel(); closeAccount(); closeOrdersModal(); } });
 document.getElementById('year').textContent = new Date().getFullYear();
 
 /* ---------- account (Firebase Auth) + liked products ---------- */
@@ -3098,6 +3086,28 @@ function statCard(label, value){
   '</div>';
 }
 
+const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let ADMIN_ANALYTICS_MONTHLY = []; // cached for PDF export: [{key,label,orders,revenue}]
+
+function monthlySalesFromOrders(ordersSnap){
+  const byMonth = {}; // 'YYYY-MM' -> {orders, revenue}
+  ordersSnap.forEach(function(doc){
+    const o = doc.data();
+    const status = (o.status||'pending').toLowerCase();
+    if(status==='cancelled') return; // cancelled orders aren't real sales
+    if(!o.createdAt || !o.createdAt.toDate) return;
+    const d = o.createdAt.toDate();
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if(!byMonth[key]) byMonth[key] = { orders:0, revenue:0, y:d.getFullYear(), m:d.getMonth() };
+    byMonth[key].orders++;
+    byMonth[key].revenue += Number(o.totalAmount||0);
+  });
+  return Object.keys(byMonth).sort().reverse().map(function(key){
+    const v = byMonth[key];
+    return { key: key, label: MONTH_NAMES_SHORT[v.m]+' '+v.y, orders: v.orders, revenue: v.revenue };
+  });
+}
+
 async function loadAdminAnalytics(){
   const el = document.getElementById('adminAnalyticsContent');
   if(typeof firebase === 'undefined' || !firebase.firestore){
@@ -3110,8 +3120,17 @@ async function loadAdminAnalytics(){
     const ordersPromise = firebase.firestore().collection('orders').get();
     const [summarySnap, ordersSnap] = await Promise.all([summaryPromise, ordersPromise]);
     const summary = summarySnap.exists ? (summarySnap.data()||{}) : {};
-    let totalOrders = 0, totalRevenue = 0;
-    ordersSnap.forEach(function(doc){ totalOrders++; totalRevenue += Number(doc.data().totalAmount || 0); });
+    let totalOrders = 0, totalRevenue = 0, cancelledOrders = 0;
+    ordersSnap.forEach(function(doc){
+      const o = doc.data();
+      const status = (o.status||'pending').toLowerCase();
+      totalOrders++;
+      if(status==='cancelled'){ cancelledOrders++; return; }
+      totalRevenue += Number(o.totalAmount || 0);
+    });
+
+    const monthly = monthlySalesFromOrders(ordersSnap);
+    ADMIN_ANALYTICS_MONTHLY = monthly;
 
     const productViews = summary.productViews || {};
     const productCarts = summary.productAddToCart || {};
@@ -3120,6 +3139,14 @@ async function loadAdminAnalytics(){
     const topViews = Object.entries(productViews).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
     const topCarts = Object.entries(productCarts).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
 
+    const monthlyRows = monthly.length ?
+      monthly.map(function(r){
+        return '<tr><td style="padding:8px 6px;border-bottom:1px solid rgba(0,0,0,.08);">'+r.label+'</td>'+
+          '<td style="padding:8px 6px;border-bottom:1px solid rgba(0,0,0,.08);text-align:center;">'+r.orders+'</td>'+
+          '<td style="padding:8px 6px;border-bottom:1px solid rgba(0,0,0,.08);text-align:right;">'+money(r.revenue)+'</td></tr>';
+      }).join('') :
+      '<tr><td colspan="3" style="padding:10px 6px;color:var(--muted);">Abhi koi sale nahi hui.</td></tr>';
+
     el.innerHTML =
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">'+
         statCard('Total Visits', summary.totalPageViews||0)+
@@ -3127,7 +3154,20 @@ async function loadAdminAnalytics(){
         statCard('Add to Cart', summary.totalAddToCart||0)+
         statCard('Total Orders', totalOrders)+
       '</div>'+
-      '<div style="font-weight:700;margin-bottom:16px;">Total Revenue: '+money(totalRevenue)+'</div>'+
+      '<div style="font-weight:700;margin-bottom:4px;">Total Sale (cancelled orders shamil nahi): '+money(totalRevenue)+'</div>'+
+      (cancelledOrders ? '<div style="font-size:12px;color:var(--muted);margin-bottom:16px;">'+cancelledOrders+' cancelled order(s) is total mein shamil nahi ki gayi.</div>' : '<div style="margin-bottom:16px;"></div>')+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
+        '<b>Monthly Sales (har mahine ki total sale)</b>'+
+        '<button type="button" class="btn btn-navy" style="padding:6px 14px;font-size:13px;" onclick="exportAnalyticsPDF()">PDF Download Karein</button>'+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">'+
+        '<thead><tr>'+
+          '<th style="text-align:left;padding:8px 6px;border-bottom:2px solid rgba(0,0,0,.15);">Month</th>'+
+          '<th style="text-align:center;padding:8px 6px;border-bottom:2px solid rgba(0,0,0,.15);">Orders</th>'+
+          '<th style="text-align:right;padding:8px 6px;border-bottom:2px solid rgba(0,0,0,.15);">Sale Amount</th>'+
+        '</tr></thead>'+
+        '<tbody>'+monthlyRows+'</tbody>'+
+      '</table>'+
       '<div style="margin-bottom:16px;"><b>Sab se zyada dekhe gaye products:</b>'+
         (topViews.length ? '<ol style="margin:8px 0 0;padding-left:20px;">'+topViews.map(function(e){return '<li>'+escapeHtml(nameOf(e[0]))+' — '+e[1]+' views</li>';}).join('')+'</ol>' : '<p style="color:var(--muted);margin:6px 0 0;">Abhi data nahi hai.</p>')+
       '</div>'+
@@ -3140,6 +3180,41 @@ async function loadAdminAnalytics(){
     else if(e && e.code === 'failed-precondition') hint = ' (Firestore index chahiye — console mein diya gaya link kholein aur index create karein.)';
     el.innerHTML = '<p style="color:var(--muted);">Analytics load nahi ho saka'+hint+'</p><p style="color:#c0392b;font-size:12px;word-break:break-all;">'+escapeHtml((e && (e.code+': '+e.message)) || 'unknown error')+'</p>';
   }
+}
+
+function exportAnalyticsPDF(){
+  const rows = ADMIN_ANALYTICS_MONTHLY;
+  const totalRevenue = rows.reduce(function(s,r){ return s+r.revenue; }, 0);
+  const totalOrders = rows.reduce(function(s,r){ return s+r.orders; }, 0);
+  const rowsHtml = rows.length ? rows.map(function(r){
+    return '<tr><td>'+r.label+'</td><td style="text-align:center;">'+r.orders+'</td><td style="text-align:right;">'+money(r.revenue)+'</td></tr>';
+  }).join('') : '<tr><td colspan="3">Abhi koi sale nahi hui.</td></tr>';
+
+  const win = window.open('', '_blank');
+  if(!win){ alert('Popup block ho gaya — is site ke liye popups allow karein aur dobara try karein.'); return; }
+  win.document.write(
+    '<!doctype html><html><head><meta charset="utf-8"><title>Al Hadi Store - Sales Report</title>'+
+    '<style>'+
+      'body{font-family:Arial,Helvetica,sans-serif;color:#222;padding:32px;}'+
+      'h1{font-size:20px;margin-bottom:2px;}'+
+      '.sub{color:#666;font-size:12px;margin-bottom:20px;}'+
+      'table{width:100%;border-collapse:collapse;font-size:13px;}'+
+      'th,td{padding:8px 10px;border-bottom:1px solid #ddd;}'+
+      'th{text-align:left;background:#f4f4f4;}'+
+      '.totals{margin-top:18px;font-size:14px;font-weight:bold;}'+
+      '@media print{ .no-print{display:none;} }'+
+    '</style></head><body>'+
+    '<h1>Al Hadi Store — Monthly Sales Report</h1>'+
+    '<div class="sub">Generated: '+new Date().toLocaleString('en-PK')+'</div>'+
+    '<table><thead><tr><th>Month</th><th style="text-align:center;">Orders</th><th style="text-align:right;">Sale Amount</th></tr></thead>'+
+    '<tbody>'+rowsHtml+'</tbody></table>'+
+    '<div class="totals">Total Orders: '+totalOrders+' &nbsp;|&nbsp; Total Sale: '+money(totalRevenue)+'</div>'+
+    '<p class="no-print" style="margin-top:24px;color:#666;font-size:12px;">Print dialog mein "Save as PDF" choose karein.</p>'+
+    '</body></html>'
+  );
+  win.document.close();
+  win.focus();
+  setTimeout(function(){ win.print(); }, 300);
 }
 
 loadCart();
