@@ -3076,19 +3076,20 @@ async function handleMultiLinkAdd(){
 
       const price = markazPrice + LINK_ADD_PROFIT;
       const productId = 'admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '_' + i;
+      const scrapedSizes = (Array.isArray(data.sizes) ? data.sizes.map(s=>String(s).trim()).filter(Boolean) : []);
       const product = {
         id: productId,
         category: 'other',
         name: name,
         price: price,
         oldPrice: null,
-        desc: data.description || null,
-        sizes: ['Standard'],
+        desc: (data.description || '').trim() || null,
+        sizes: scrapedSizes.length ? scrapedSizes : ['Standard'],
         sizeLabel: 'Size',
         colors: [],
         videoUrl: null,
         stockStatus: 'in',
-        stockQty: null,
+        stockQty: 40,
         hidden: false,
         deliveryCharge: (data.deliveryCharge != null) ? data.deliveryCharge : DELIVERY_CHARGE,
         flashSale: false,

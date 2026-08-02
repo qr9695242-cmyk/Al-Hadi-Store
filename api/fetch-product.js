@@ -40,6 +40,20 @@ function decodeEntities(s) {
     .trim();
 }
 
+// Some sites put raw HTML inside JSON-LD "description" or a Shopify
+// product JSON's "body_html" — this strips the tags and tidies whitespace
+// so we don't save "<p>Some <b>text</b></p>" straight into the product desc.
+function stripHtml(s) {
+  if (!s) return null;
+  const text = decodeEntities(
+    String(s)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|li|div|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  );
+  return text.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').replace(/^\s+|\s+$/g, '') || null;
+}
+
 function extractMeta(html, key) {
   // matches <meta property="X" content="Y"> or <meta name="X" content="Y">, either attribute order
   const patterns = [
@@ -106,6 +120,116 @@ function findDeliveryCharge(plainText) {
   return n;
 }
 
+const SIZE_WORD_RE = /^(x{0,3}(s|m|l)|xs|xl|xxl|xxxl|small|medium|large|free\s*size|standard|one\s*size|\d{1,3}(\.\d)?\s*(cm|in|ml|kg|g)?)$/i;
+
+function cleanOptionList(list) {
+  const seen = new Set();
+  const out = [];
+  for (let raw of list) {
+    if (typeof raw !== 'string') continue;
+    let v = decodeEntities(raw).trim();
+    if (!v) continue;
+    // drop obvious placeholder / non-option junk
+    if (/^(select|choose|please select|--|—|n\/a)/i.test(v)) continue;
+    if (v.length > 40) continue;
+    const key = v.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+  }
+  return out.slice(0, 20);
+}
+
+// Best-effort search for size / variant options across a few common
+// supplier-site patterns. Returns an array of strings (e.g. ["S","M","L"])
+// or null if nothing usable was found — caller falls back to ["Standard"].
+function extractSizeOptions(html, jsonLd) {
+  // 1) schema.org Product with variants (hasVariant / additionalProperty)
+  if (jsonLd) {
+    if (Array.isArray(jsonLd.hasVariant)) {
+      const names = jsonLd.hasVariant
+        .map(v => v && (v.size || v.name || (v.additionalProperty && v.additionalProperty.value)))
+        .filter(Boolean);
+      const cleaned = cleanOptionList(names);
+      if (cleaned.length > 1) return cleaned;
+    }
+    if (Array.isArray(jsonLd.additionalProperty)) {
+      const sizeProp = jsonLd.additionalProperty.find(p => p && /size/i.test(p.name || ''));
+      if (sizeProp && sizeProp.value) {
+        const cleaned = cleanOptionList(String(sizeProp.value).split(/[,/]/));
+        if (cleaned.length > 1) return cleaned;
+      }
+    }
+  }
+
+  // 2) Shopify-style embedded product JSON: <script id="ProductJson-...">
+  //    contains {"options":[{"name":"Size","values":["S","M","L"]}], ...}
+  //    or a top-level {"variants":[{"option1":"S"}, ...]}
+  const shopifyRe = /<script[^>]+id=["']ProductJson[^"']*["'][^>]*>([\s\S]*?)<\/script>/i;
+  const shopifyM = html.match(shopifyRe);
+  if (shopifyM) {
+    try {
+      const data = JSON.parse(shopifyM[1].trim());
+      if (Array.isArray(data.options)) {
+        const sizeOpt = data.options.find(o => o && /size/i.test(typeof o === 'string' ? o : (o.name || '')));
+        if (sizeOpt && Array.isArray(sizeOpt.values)) {
+          const cleaned = cleanOptionList(sizeOpt.values);
+          if (cleaned.length > 1) return cleaned;
+        }
+      }
+      if (Array.isArray(data.variants)) {
+        const opt1 = data.variants.map(v => v && v.option1).filter(Boolean);
+        const cleaned = cleanOptionList(opt1);
+        if (cleaned.length > 1) return cleaned;
+      }
+    } catch (e) { /* not valid JSON, ignore */ }
+  }
+
+  // 3) A <select> element whose name/id/class mentions "size", reading its <option> labels
+  const selectRe = /<select[^>]*(?:name|id|class)=["'][^"']*size[^"']*["'][^>]*>([\s\S]*?)<\/select>/i;
+  const selectM = html.match(selectRe);
+  if (selectM) {
+    const optionRe = /<option[^>]*value=["']([^"']*)["'][^>]*>([\s\S]*?)<\/option>/gi;
+    const labels = [];
+    let om;
+    while ((om = optionRe.exec(selectM[1]))) {
+      const label = stripHtml(om[2]) || om[1];
+      if (label) labels.push(label);
+    }
+    const cleaned = cleanOptionList(labels);
+    if (cleaned.length > 1) return cleaned;
+  }
+
+  // 4) Buttons/spans/labels inside a "size" swatch block, e.g.
+  //    <div class="size-swatch"><span>S</span><span>M</span><span>L</span></div>
+  const swatchRe = /<[^>]+class=["'][^"']*size[^"'\s]*(?:swatch|option|selector|list|group)[^"']*["'][^>]*>([\s\S]{0,1500}?)<\/div>/i;
+  const swatchM = html.match(swatchRe);
+  if (swatchM) {
+    const itemRe = /<(?:span|button|label|li)[^>]*>([\s\S]*?)<\/(?:span|button|label|li)>/gi;
+    const labels = [];
+    let im;
+    while ((im = itemRe.exec(swatchM[1]))) {
+      const label = stripHtml(im[1]);
+      if (label) labels.push(label);
+    }
+    const cleaned = cleanOptionList(labels.filter(l => SIZE_WORD_RE.test(l) || l.length <= 6));
+    if (cleaned.length > 1) return cleaned;
+  }
+
+  // 5) Loose text fallback: "Size: S, M, L, XL" mentioned in the page copy
+  const plain = stripHtml(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' '));
+  if (plain) {
+    const m = plain.match(/size[s]?\s*[:\-]\s*([A-Za-z0-9,\/\s]{2,60})/i);
+    if (m) {
+      const cleaned = cleanOptionList(m[1].split(/[,\/]+/));
+      const looksLikeSizes = cleaned.length > 1 && cleaned.every(c => SIZE_WORD_RE.test(c));
+      if (looksLikeSizes) return cleaned;
+    }
+  }
+
+  return null;
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
@@ -170,7 +294,7 @@ module.exports = async (req, res) => {
 
     if (jsonLd) {
       name = decodeEntities(typeof jsonLd.name === 'string' ? jsonLd.name : null);
-      description = decodeEntities(typeof jsonLd.description === 'string' ? jsonLd.description : null);
+      description = stripHtml(typeof jsonLd.description === 'string' ? jsonLd.description : null);
       let offers = jsonLd.offers;
       if (Array.isArray(offers)) offers = offers[0];
       if (offers) {
@@ -184,6 +308,17 @@ module.exports = async (req, res) => {
 
     if (!name) name = extractMeta(html, 'og:title');
     if (!description) description = extractMeta(html, 'og:description') || extractMeta(html, 'description');
+    if (!description) {
+      // Shopify-style embedded product JSON often has a full HTML description
+      // ("body_html") even when og:description is missing or truncated.
+      const shopifyM = html.match(/<script[^>]+id=["']ProductJson[^"']*["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (shopifyM) {
+        try {
+          const data = JSON.parse(shopifyM[1].trim());
+          if (data && typeof data.description === 'string') description = stripHtml(data.description);
+        } catch (e) { /* ignore */ }
+      }
+    }
     if (!price) {
       const priceMeta = extractMeta(html, 'product:price:amount') || extractMeta(html, 'og:price:amount') || extractMeta(html, 'twitter:data1');
       price = numberFromPriceString(priceMeta);
@@ -199,6 +334,7 @@ module.exports = async (req, res) => {
 
     const plainText = decodeEntities(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
     const deliveryCharge = findDeliveryCharge(plainText);
+    const sizes = extractSizeOptions(html, jsonLd);
 
     if (!name && !price) {
       return res.status(200).json({ ok: false, message: 'Is page se product ki detail nahi mil saki. Naam/price khud likh lein.' });
@@ -211,6 +347,7 @@ module.exports = async (req, res) => {
       price: price,
       images: images.slice(0, 5),
       deliveryCharge: deliveryCharge,
+      sizes: sizes, // array of option labels (e.g. ["S","M","L"]) or null if none found
       sourceUrl: target.toString()
     });
   } catch (err) {
