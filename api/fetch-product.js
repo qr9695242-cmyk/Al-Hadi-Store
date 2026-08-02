@@ -140,6 +140,57 @@ function cleanOptionList(list) {
   return out.slice(0, 20);
 }
 
+// Walks a parsed JSON value looking for a key that mentions "size" and
+// holds an array of short string/number values (variant labels), or a
+// plain array of short values sitting under such a key one level up.
+// Depth-limited so a huge embedded state blob can't hang the function.
+function deepFindSizeArray(node, depth) {
+  if (node == null || depth > 6) return null;
+  if (typeof node !== 'object') return null;
+
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = deepFindSizeArray(child, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  for (const key of Object.keys(node)) {
+    const val = node[key];
+    if (/size/i.test(key) && Array.isArray(val) && val.length > 1) {
+      const labels = val.map(v => {
+        if (v == null) return null;
+        if (typeof v === 'string' || typeof v === 'number') return String(v);
+        if (typeof v === 'object') return v.name || v.label || v.value || v.title || null;
+        return null;
+      }).filter(Boolean);
+      const cleaned = cleanOptionList(labels);
+      if (cleaned.length > 1) return cleaned;
+    }
+  }
+  for (const key of Object.keys(node)) {
+    const found = deepFindSizeArray(node[key], depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Scans every <script type="application/json"> block on the page (covers
+// Next.js __NEXT_DATA__, Nuxt __NUXT_DATA__, and similar) for size data.
+function extractSizesFromEmbeddedJson(html) {
+  const re = /<script[^>]+type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    try {
+      const data = JSON.parse(m[1].trim());
+      const found = deepFindSizeArray(data, 0);
+      if (found) return found;
+    } catch (e) { /* not valid JSON, skip this block */ }
+  }
+  return null;
+}
+
 // Best-effort search for size / variant options across a few common
 // supplier-site patterns. Returns an array of strings (e.g. ["S","M","L"])
 // or null if nothing usable was found — caller falls back to ["Standard"].
@@ -215,6 +266,19 @@ function extractSizeOptions(html, jsonLd) {
     const cleaned = cleanOptionList(labels.filter(l => SIZE_WORD_RE.test(l) || l.length <= 6));
     if (cleaned.length > 1) return cleaned;
   }
+
+  // 4.5) Embedded JSON state blobs. Many modern storefronts (Next.js,
+  //      Nuxt, custom React apps — markaz.app included) render their size
+  //      buttons entirely client-side after the page loads; the raw HTML
+  //      this function fetches never contains a <select> or swatch <div>
+  //      for steps 2-4 to find. The product data is still there, though,
+  //      sitting inside a <script type="application/json"> blob (Next.js
+  //      calls it __NEXT_DATA__, Nuxt calls it __NUXT_DATA__, but the
+  //      pattern below doesn't care about the id — it just looks at every
+  //      JSON script block). This walks that JSON looking for a key whose
+  //      name contains "size" pointing at an array of short values.
+  const embeddedSizes = extractSizesFromEmbeddedJson(html);
+  if (embeddedSizes) return embeddedSizes;
 
   // 5) Loose text fallback: "Size: S, M, L, XL" mentioned in the page copy
   const plain = stripHtml(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' '));
