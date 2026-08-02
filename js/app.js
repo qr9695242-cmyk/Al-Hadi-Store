@@ -3075,6 +3075,7 @@ async function handleMultiLinkAdd(){
       }
 
       const price = markazPrice + LINK_ADD_PROFIT;
+      const oldPrice = price + LINK_ADD_PROFIT; // shown crossed-out on the product page as the "before discount" price
       const productId = 'admin_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '_' + i;
       const scrapedSizes = (Array.isArray(data.sizes) ? data.sizes.map(s=>String(s).trim()).filter(Boolean) : []);
       const product = {
@@ -3082,7 +3083,7 @@ async function handleMultiLinkAdd(){
         category: 'other',
         name: name,
         price: price,
-        oldPrice: null,
+        oldPrice: oldPrice,
         desc: (data.description || '').trim() || null,
         sizes: scrapedSizes.length ? scrapedSizes : ['Standard'],
         sizeLabel: 'Size',

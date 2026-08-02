@@ -112,11 +112,11 @@ function numberFromPriceString(v) {
 
 function findDeliveryCharge(plainText) {
   // Looks for phrases like "Delivery Charges: Rs 200" / "Shipping fee PKR 150" etc.
-  const re = /(delivery|shipping)[^.\n\d]{0,25}(?:rs\.?|pkr|₨)?\s*([\d,]{2,6})/i;
+  const re = /(delivery|shipping)[^.\n\d]{0,20}(?:rs\.?|pkr|₨)?\s*([\d,]{2,5})/i;
   const m = plainText.match(re);
   if (!m) return null;
   const n = numberFromPriceString(m[2]);
-  if (n == null || n <= 0 || n > 20000) return null; // sanity bounds
+  if (n == null || n <= 0 || n > 1000) return null; // real delivery fees are small; anything bigger is almost certainly an unrelated number the loose regex caught (stock count, order minimum, etc.) — safer to fall back to the site's default delivery charge than save a wrong one.
   return n;
 }
 
