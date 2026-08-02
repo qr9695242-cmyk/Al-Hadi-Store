@@ -1275,6 +1275,9 @@ function saveOrderToFirestore(orderData){
     .then(function(docRef){
       LAST_ORDER_ID = docRef.id;
       addMyOrderId(docRef.id);
+      const idEl = document.getElementById('orderIdText');
+      const wrapEl = document.getElementById('orderIdDisplay');
+      if(idEl && wrapEl){ idEl.textContent = docRef.id; wrapEl.style.display='block'; }
     })
     .catch(function(error){
       console.warn('⚠️ Order could not be saved for tracking (non-blocking):', error);
@@ -2721,21 +2724,25 @@ function renderMyOrders(){
       list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Orders load nahi ho sakay — internet check karein.</p>';
     });
 }
-function trackOrdersByPhone(){
+function trackOrderByIdAndPhone(){
+  const orderId = document.getElementById('trackOrderIdInput').value.trim();
   const phone = document.getElementById('trackPhoneInput').value.trim();
   const list = document.getElementById('phoneOrdersList');
+  if(!orderId){ toast('Order ID likhein'); return; }
   if(!phone){ toast('Phone number likhein'); return; }
   if(typeof firebase === 'undefined' || !firebase.firestore){
     list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Order tracking abhi available nahi hai.</p>';
     return;
   }
   list.innerHTML = '<p style="color:var(--muted);font-size:13px;">Dhoond rahe hain…</p>';
-  firebase.firestore().collection('orders').where('phone', '==', phone).limit(50).get()
-    .then(function(snap){
-      if(snap.empty){ list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Is phone number se koi order nahi mila.</p>'; return; }
-      const cards = [];
-      snap.forEach(function(doc){ cards.push(orderCardHtml(doc.id, doc.data())); addMyOrderId(doc.id); });
-      list.innerHTML = cards.join('');
+  firebase.firestore().collection('orders').doc(orderId).get()
+    .then(function(doc){
+      if(!doc.exists || String((doc.data()||{}).phone||'').trim() !== phone){
+        list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Order nahi mila — Order ID aur phone number check karein.</p>';
+        return;
+      }
+      addMyOrderId(doc.id);
+      list.innerHTML = orderCardHtml(doc.id, doc.data());
     })
     .catch(function(){
       list.innerHTML = '<p style="color:var(--muted);font-size:14px;">Search fail ho gayi — internet check karein.</p>';

@@ -441,6 +441,7 @@
           <div class="check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg></div>
           <h3>Order received — shukriya!</h3>
           <p id="payStepMsg">Please send your payment to any account below.</p>
+          <p id="orderIdDisplay" style="display:none;font-size:14px;margin-top:-6px;color:var(--muted);">Aapka Order ID: <strong id="orderIdText" style="color:inherit;user-select:all;"></strong> — isay save kar lein, baad mein order track karne ke kaam aayega.</p>
           <div class="total-pill">Total to pay: <span class="amt" id="finalTotal">Rs 200</span></div>
 
           <div class="pay-grid" style="margin-top:22px; text-align:left;">
@@ -614,10 +615,14 @@
       <div id="myOrdersList"></div>
 
       <hr style="margin:22px 0;border:none;border-top:1px solid rgba(0,0,0,.08);">
-      <h3 style="margin:0 0 10px;">Phone Number se Dhoondain</h3>
-      <div class="frow" style="display:flex;gap:8px;">
-        <input type="tel" id="trackPhoneInput" placeholder="03xxxxxxxxx" style="flex:1;">
-        <button type="button" class="btn btn-gold" onclick="trackOrdersByPhone()">Dhoondain</button>
+      <h3 style="margin:0 0 10px;">Order ID se Dhoondain</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 10px;">Order place karte waqt jo Order ID mila tha, wo yahan phone number ke sath daalein.</p>
+      <div class="frow" style="display:flex;flex-direction:column;gap:8px;">
+        <input type="text" id="trackOrderIdInput" placeholder="Order ID">
+        <div style="display:flex;gap:8px;">
+          <input type="tel" id="trackPhoneInput" placeholder="03xxxxxxxxx" style="flex:1;">
+          <button type="button" class="btn btn-gold" onclick="trackOrderByIdAndPhone()">Dhoondain</button>
+        </div>
       </div>
       <div id="phoneOrdersList" style="margin-top:14px;"></div>
     </div>
