@@ -1,254 +1,261 @@
-# Al Hadi Store
+# Milaap — Phase 1
 
-## Latest Update: Auth Overhaul + Firebase Hosting Config
+Login/Signup + Home Screen + Profile, Firebase ke saath.
 
-This pass focused on Firebase Authentication and deployment configuration
-without touching products, cart, checkout, or the admin panel's existing
-behavior.
+> Note: `.env.local` mein Agora App ID already daal di gayi hai.
+> Firebase keys abhi khaali hain — step 3-4 follow karke wo fill karein.
+> Support/payment contact `lib/config.js` mein hai (Phase 3 Wallet aur
+> Help screen isko use karenge).
 
-### What changed
-- **Forgot Password** (customer-facing): "Password bhool gaye?" link on the
-  Login tab opens an inline reset-email form (`sendPasswordResetEmail`).
-  The admin panel already had its own forgot-password flow — that one is
-  untouched, just restyled to match.
-- **Email verification is now enforced.** Signing up sends a verification
-  email (`sendEmailVerification`) and immediately signs the new account
-  back out. Logging in with an email/password account that hasn't clicked
-  that link is blocked, with a "Resend verification email" button. This
-  does **not** apply to Google Sign-In (Google already verifies emails) or
-  to the admin account (managed manually in Firebase Console).
-- **Better error messages** — `friendlyAuthError()` now covers more Firebase
-  Auth error codes (missing email/password, popup-blocked, quota-exceeded,
-  etc.) in addition to the existing ones.
-- **Loading states** on every auth button (login, signup, forgot password,
-  admin login, resend-verification) — button disables and shows a spinner
-  while the request is in flight, so a tap always gets visible feedback.
-- **Password show/hide toggle** on all three password fields (login,
-  signup, admin).
-- **Toast notifications** now have success (green) / error (red) / info
-  (navy, default) variants instead of one color for everything.
-- Removed a leftover debug toast that fired on every tap of the Google
-  Sign-In button.
-- Google Sign-In, cart, checkout, likes, orders, and the admin panel were
-  **not** modified beyond the cosmetic toast/loading-state pass above.
+## Setup (apne laptop pe)
 
-### Setup required in Firebase Console (one-time)
-1. **Authentication → Sign-in method**: enable both **Email/Password** and
-   **Google**, if not already enabled.
-2. **Authentication → Templates → Email address verification**: this is
-   Firebase's default template and works out of the box — customize the
-   sender name/message here if you want it to look more branded.
-3. Your existing admin user (`qraza2376@gmail.com`) does **not** need to
-   re-verify anything — the verification requirement only applies to the
-   customer-facing `submitLogin()` flow, not `submitAdminLogin()`.
-4. Deploy the updated `firestore.rules` (see below) — logic is unchanged
-   from `FIRESTORE_RULES.txt`, just cleaned up with English comments.
+1. **Node.js install karein** (v18+): https://nodejs.org
 
-### Deployment: Vercel vs. Firebase Hosting
-This repo currently deploys on **Vercel** (`vercel.json`), and `alhadi.store`
-is presumably pointed at Vercel's nameservers/CNAME today. A `firebase.json`
-+ `.firebaserc` have been added so the same static site can also be deployed
-to **Firebase Hosting** if you want to consolidate everything under one
-Firebase project:
+2. **Dependencies install karein**
+   ```
+   npm install
+   ```
 
-```bash
-npm install -g firebase-tools   # once
-firebase login
-firebase deploy --only hosting,firestore:rules
+3. **Firebase project banayein**
+   - https://console.firebase.google.com pe jaayein → Add project
+   - Build > Authentication > Get Started > Email/Password enable karein
+   - Build > Firestore Database > Create database (test mode se shuru karein)
+   - Project Settings > General > "Your apps" > Web app (</>) add karein
+   - Config values copy karein
+
+4. **Environment file banayein**
+   ```
+   cp .env.local.example .env.local
+   ```
+   Firebase config values `.env.local` mein paste karein.
+
+5. **Firestore rules deploy karein** (Firebase Console > Firestore > Rules mein
+   `firestore.rules` ka content paste kar dein, ya Firebase CLI use karein).
+
+6. **Dev server chalayein**
+   ```
+   npm run dev
+   ```
+   http://localhost:3000 pe khulega.
+
+## Ab kya kaam karta hai (Phase 2 tak)
+
+- `/signup` — naya account banaye (Firebase Auth + Firestore user doc)
+- `/login` — sign in
+- `/` — Home screen (protected)
+- `/profile` — user info, coins/diamonds display, sign out
+- `/rooms` — Live Streams aur Audio Rooms ki list, naya room banayein
+- `/live/[roomId]` — Agora video broadcast: host camera/mic publish karta
+  hai, viewers dekhte hain, saath mein live chat
+- `/audio-room/[roomId]` — 12-seat audio room: koi bhi seat tap karke baith
+  sakta hai (mic publish hoti hai), khali chhod ke chala jaaye, saath mein
+  live chat
+- `/wallet` — coins/diamonds balance, recharge history
+- `/wallet/recharge` — package select karke JazzCash/Easypaisa se pay karein,
+  request submit hoti hai (admin approval ka wait — Phase 4 mein admin panel
+  banega)
+- Gift system — live/audio rooms mein niche gift bar se koi bhi gift bhej
+  sakta hai; coins deduct hoke host ki diamonds mein add ho jaate hain,
+  aur ek chhota "X sent Y" feed room ke upar dikhta hai
+- `/vip` — VIP/SVIP tiers, lifetime recharge (Rs) ke hisaab se level
+- `/family` — families ki leaderboard, naya family banayein ya join karein
+- `/family/[familyId]` — members list, diamonds contribute karke family
+  level up karein
+- `/leaderboard` — "Top Hosts" (sabse zyada diamonds kamaane wale) aur
+  "Rich List" (sabse zyada recharge karne wale)
+- PK Battle — live stream ke andar host "⚔ Start PK Battle" se doosre live
+  host ko challenge kar sakta hai; 3 minute ka timer, dono taraf gifts se
+  score badhta hai, jyada score wala jeetta hai
+- `/admin` — sirf `ADMIN_EMAILS` (lib/config.js) mein di gayi email se
+  login karne par khulta hai: pending recharge requests approve/reject
+  karein, live rooms force-end karein
+- `/help` — WhatsApp aur email support
+
+Frames, Vehicles/Cars, Friends/CP, aur push Notifications abhi ban nahi
+paaye — original list mein the lekin app ka core loop (auth → stream →
+gift → wallet → VIP → PK battle → family → admin) complete ho chuka hai.
+Ye chaaron baad mein isi structure pe add ho sakte hain.
+
+### PK Battle ka scope
+
+Abhi PK battle sirf "gifts = score" tak simple rakha gaya hai — real
+Bigo-style apps mein dono streams split-screen mein ek saath dikhti hain
+(dono Agora channels ek hi UI mein). Yahan har host apni video apne room
+mein dekhta hai aur sirf score bar dikhta hai — split-screen video Phase 5
+mein add ho sakta hai agar chahiye ho.
+
+### ⚠️ Wallet economy — production security note
+
+Abhi coins/diamonds Firestore mein seedha client se update hote hain
+(recharge approval + gift sending). Ye demo/testing ke liye theek hai,
+lekin **real paise involve hone ki wajah se** launch se pehle ye poora
+logic ek trusted backend (Firebase Cloud Functions) mein move karna
+zaroori hai — warna koi bhi apna balance khud badal sakta hai. Detail
+`lib/gifts.js` ke top comment mein hai.
+
+### Agora ke baare mein zaroori baat
+
+Abhi App ID-only mode use ho raha hai — testing ke liye theek hai, lekin
+**production launch se pehle token-based auth zaroori hai**, warna koi bhi
+aapki App ID se channel join kar sakta hai. Detail `lib/agora.js` ke
+comments mein hai.
+
+### Firestore index
+
+`/rooms` list query (`status == "live"` + `orderBy(createdAt)`) ke liye
+Firestore ek **composite index** maangega. Jab pehli baar `/rooms` page
+kholenge aur console mein error aaye, uss error mein diya gaya link click
+kar dein — Firebase khud index bana dega (1-2 min lagte hain).
+
+## Phase 4B — Social Layer (Follow, Search, Presence, Block/Report, Notifications)
+
+Naye features, koi naya external account/API key nahi chahiye — sab
+Firestore + existing Firebase Auth pe bane hain:
+
+- **User Search** (`/search`) — `lib/search.js`, name-prefix match. Naye
+  users ka `displayNameLower` field auto-set hota hai (`lib/AuthContext.js`);
+  purane accounts bhi pehli baar login pe khud-ba-khud backfill ho jaate hain.
+- **Follow / Following** — `lib/follow.js`. Har profile pe Follow button
+  (`components/FollowButton.jsx`), followers/following count profile pe
+  aur `/u/{uid}/connections` pe list.
+- **Public Profile** — `/u/{uid}` — kisi bhi user ka profile dekhne ke liye.
+  Apna khud ka uid daalne pe `/profile` pe redirect ho jata hai.
+- **Real-time Online Status** — `lib/presence.js`. Har 30s heartbeat likha
+  jata hai; ~45s se purana ho to offline maana jata hai. Ye Firestore-based
+  "best effort" presence hai — asal Realtime-Database `onDisconnect()` jitna
+  turant/accurate nahi (tab band karne ke ~45s baad tak online dikh sakta hai).
+- **Block & Report** — `lib/block.js`. Kisi profile ke ⋮ menu se block ya
+  report kar sakte hain. Blocked list `/blocked` pe manage hoti hai. Reports
+  sirf Firestore mein `status: pending` ke sath log hote hain — Admin Panel
+  mein inhe review karne ka UI abhi nahi bana (agla step ho sakta hai).
+- **In-app Notifications** — `lib/notifications.js`, bell icon home/profile
+  header mein. Abhi sirf "naya follower" event bhejta hai; gift/PK/family
+  jaisi jagah pe `createNotification()` call add karke aur events wire
+  kiye ja sakte hain. **Push notifications (phone lock screen pe) alag
+  cheez hain** — unke liye Firebase Cloud Messaging VAPID key aur service
+  worker chahiye, ye is batch mein include nahi.
+
+### ⚠️ Deploy karna zaroori hai
+
+`firestore.rules` update hui hai (naye `follows`, `blocks`, `reports`,
+`notifications` collections + `users` doc pe counter-update rule). Firebase
+console ya CLI (`firebase deploy --only firestore:rules`) se naya rules
+file deploy kiye bina ye saare features permission-denied error denge.
+
+### Naye Firestore composite index
+
+`/u/{uid}/connections` (followers/following list) query
+(`where(followingId==uid) + orderBy(createdAt)`, aur wohi followerId ke
+sath) ke liye Firestore composite index maangega — pehli baar khulne pe
+console error mein diya link click kar dein, jaisa `/rooms` ke liye upar
+bataya gaya hai.
+
+## Phase 5 — Host Level, VIP Badges, Rewards, Agency, Roles, Analytics, Theme
+
+Naya external account/API key nahi chahiye — sab existing Firebase pe bana hai.
+
+- **Host Level System** (`lib/hostLevel.js`) — lifetime diamonds ke hisaab se
+  8 levels (Rising → Legend). Badge `components/HostLevelBadge.jsx` profile,
+  leaderboard, agency, aur user-row pe dikhta hai.
+- **VIP Badge** (`components/VipBadge.jsx`) — pehle se maujood VIP tiers
+  (`lib/vip.js`) ko ab ek chhota badge bhi milta hai jo profile/leaderboard
+  pe show hota hai.
+- **Daily Rewards / Lucky Box / Spin Wheel** (`lib/rewards.js`,
+  `/rewards`) — daily check-in (7-day streak, missed day pe reset), coins
+  se Lucky Box open karna, ya Spin Wheel ghumana — dono weighted-random
+  prizes (coins/diamonds/jackpot) dete hain.
+- **Agency Panel** (`lib/agency.js`, `/agency`) — koi bhi agency bana sakta
+  hai (6-character invite code milta hai), hosts us code se join karke
+  agency ka hissa ban sakte hain; leader ko members ki diamonds-earning
+  roster dikhti hai.
+- **Super Admin Roles & Permissions** (`lib/roles.js`) — `ADMIN_EMAILS`
+  (lib/config.js) ab **superadmin** tier hai; superadmin Admin Panel se
+  kisi bhi user ko **admin** (recharge approval, room force-end, analytics)
+  ya **moderator** (sirf reports triage) role de sakta hai. Reports ab
+  Admin Panel mein directly review/resolve ho sakte hain.
+- **Analytics Dashboard** (`lib/analytics.js`, `/admin/analytics`) — total
+  users, aaj ke naye users, live rooms, pending/approved recharges, total
+  revenue (Rs), families, aur pending reports — sab ek jagah, admin/superadmin
+  ke liye.
+- **Dark/Light Theme Switch** (`lib/ThemeContext.js`,
+  `components/ThemeToggle.jsx`) — toggle button home/profile header pe;
+  preference `localStorage` mein save hoti hai. Poore app ka color system
+  ab CSS variables (`app/globals.css`) se aata hai, isliye purane pages
+  bhi bina extra kaam ke theme switch pe repaint ho jaate hain.
+
+### ⚠️ Deploy karna zaroori hai (Phase 5)
+
+`firestore.rules` phir se update hui hai (naye `agencies`, `rewardStatus`,
+`luckyBoxLog`, `spinWheelLog` collections + `users` doc pe role-change
+protection + reports ab `isModerator()` se triage hote hain). Deploy kiye
+bina naye features permission-denied denge:
+```
+firebase deploy --only firestore:rules
 ```
 
-**One feature does not carry over automatically:** `api/product-og.js` is a
-Vercel serverless function that rewrites link-preview requests (WhatsApp,
-Facebook, etc.) to a per-product OG image/title. Firebase Hosting can only
-run the equivalent via a **Cloud Function**, which requires the paid Blaze
-plan — the same reason this project already avoids Firebase Storage
-(see `STORAGE_RULES.txt`). `firebase.json` intentionally leaves this
-rewrite out so the site stays deployable on Firebase's free Spark plan; on
-Firebase Hosting, link previews will fall back to the generic store-wide
-`og:image` instead of a per-product image. If you decide the per-product
-preview is worth the Blaze plan, that Cloud Function can be added later.
+### Naye Firestore composite index
 
-**To point `alhadi.store` at Firebase Hosting**, use Firebase Console →
-Hosting → "Add custom domain" and follow the DNS verification steps; this
-will require updating your domain's DNS records (and removing/replacing
-whatever currently points it at Vercel). If you'd rather keep Vercel as the
-production host and only use Firebase for Auth/Firestore (as it already is
-today), no DNS changes are needed — `firebase.json` just gives you the
-option.
+`/agency` page ka members list query (`where(agencyId==id) + orderBy(diamonds
+desc)`) ke liye Firestore composite index maangega — pehli baar khulne pe
+console error mein diya gaya link click kar dein (jaisa `/rooms` aur
+`/u/{uid}/connections` ke liye upar bataya gaya hai).
 
----
+### Kisi ko admin/moderator banana
 
-## Phase 3 Progress: CSV Bulk Upload + Analytics
+1. Superadmin (`ADMIN_EMAILS` wali email se) login karke `/admin` kholein.
+2. Us user ka UID copy karein (unke public profile URL `/u/<uid>` se milta
+   hai).
+3. "Manage Team Roles" section mein UID paste karke role select karein →
+   **Update Role**.
 
-- **CSV Bulk Upload**: Admin Panel → "Bulk Upload" tab. Pehle "Sample CSV
-  Download Karein" se format dekh lein, phir apni products list usi
-  format mein CSV file mein bana kar upload kar dein — ek sath saare
-  products add ho jayenge. Har product ki image(s) ka link (URL) dena
-  zaroori hai; ek se zyada links ho to unke darmiyan `;` (semicolon)
-  lagayein.
-- **Analytics**: Admin Panel → "Analytics" tab — total site visits,
-  product views, add-to-cart count, total orders aur revenue, aur sab se
-  zyada dekhe/cart mein dale gaye products ki list. Ye Firestore ke
-  `analytics/summary` document mein counters ke tor par save hota hai.
-  `FIRESTORE_RULES.txt` mein iske liye naya rule shamil kar diya gaya
-  hai — Firebase Console → Firestore Database → Rules mein updated file
-  paste kar ke "Publish" dabana na bhoolein.
-- **Cloudinary image migration**: Abhi baaqi hai — iske liye Cloudinary
-  (cloudinary.com) par free account bana kar Cloud Name, API Key, aur
-  API Secret dena hoga.
+## Phase 6 (baaki bacha hua — external accounts/credentials chahiye)
 
-## Phase 2 Update: File Size Optimization
+Google Login, Phone Number Login (OTP), Push Notifications (Firebase
+Cloud Messaging VAPID key + service worker), Coins Purchase Payment
+Gateway (JazzCash/Easypaisa/Stripe API integration), Video Upload/Short
+Videos (storage + transcoding), Multi-Guest Live (4/6/9 seats — split
+Agora channels), Live Stream Recording, Share Live Link (deep link/OG
+tags). In sabke liye pehle respective service pe account banana/API keys
+lena hoga — jab ready hon, batayein, isi structure pe wire kar denge.
 
-Pehle `js/products-data.js` mein har product ki tasveer seedha base64 text
-ke tor par likhi hui thi — is wajah se ye file akele 1.6MB ki ho gayi thi,
-aur `index.html` bhi 568KB tak pohnch gaya tha (usme bhi logo base64 mein
-tha). Is wajah se site load hone mein time lagta tha, kyunki poori file ek
-sath download honi parti thi.
+## GitHub + Vercel Deployment
 
-Ab saari tasveerein alag chhoti files ke tor par `assets/products/` aur
-`assets/icons/` mein rakhi gayi hain, aur code sirf unka path use karta
-hai:
+1. GitHub pe naya repo banayein, phir:
+   ```
+   git init
+   git add .
+   git commit -m "Phase 1: auth, home, profile"
+   git branch -M main
+   git remote add origin <your-repo-url>
+   git push -u origin main
+   ```
+2. https://vercel.com pe GitHub se login karein → "Import Project" → apna repo select karein
+   > ⚠️ Agar aapke GitHub repo ka structure `live-app/` folder ke andar hai
+   > (jaisa is zip mein hai — repo root pe `live-app/`, uske andar
+   > `package.json`), to **Root Directory** field mein `live-app` type
+   > karna zaroori hai (Vercel import screen pe hi dikhta hai, ya baad mein
+   > Settings → General → Root Directory se). Agar yeh set nahi hua to build
+   > `package.json` nahi dhoondh payega aur site pe `404: NOT_FOUND` aayega.
+3. Environment Variables tab mein `.env.local` ki saari values daal dein
+4. Deploy — Vercel automatically Next.js detect kar lega
 
-- `index.html`: 568KB → 36KB
-- `js/products-data.js`: 1.6MB → 16KB
-- Tasveerein ab browser cache kar sakta hai aur zaroorat ke mutabiq
-  parallel mein load hoti hain — site pehle se kaafi tez khulegi.
+## Next Phases
 
-Koi functionality nahi badli — admin panel, cart, orders, likes, sab
-pehle jaisa hi kaam karega. Ye sirf backend/file-structure ki behtari hai.
+- ~~**Phase 2** — Agora Live Streaming, Audio Rooms (12 seats), Live Chat~~ ✅ done
+- ~~**Phase 3** — Wallet, Gift System, Coins, Easypaisa/JazzCash Recharge~~ ✅ done
+- ~~**Phase 4** — VIP/SVIP, PK Battle, Family System, Admin Panel~~ ✅ done
+- ~~**Phase 4B** — Follow/Following, User Search, Online Status, Block & Report, Notifications~~ ✅ done
+- **Phase 5** — baaki missing list se: Host Level System, VIP Badge, Daily
+  Tasks/Rewards, Lucky Box, Spin Wheel, Agency Panel, Super Admin Roles,
+  Analytics Dashboard, Dark/Light Theme (koi external account nahi chahiye).
+  Uske baad: Google Login, Phone OTP, Push Notifications (Firebase setup
+  chahiye) aur Payment Gateway, Video Upload, Multi-Guest Live, Stream
+  Recording (external accounts/credentials + zyada dev time chahiye).
 
-## Folder Structure
-- index.html            -> Main HTML file (Firebase SDK + config linked)
-- css/style.css          -> All page styling
-- js/products-data.js    -> Default/base product catalog (embedded)
-- js/app.js              -> Main application logic (cart, admin panel, rendering)
-- js/firebase-config.js  -> Firebase project configuration + initialization
+## Admin access
 
-## IMPORTANT: Firestore setup zaroori hai (product-sync fix)
-
-Pehle admin panel se add kiya hua product sirf usi device/browser par dikhta
-tha (kyunki woh `localStorage` mein save hota tha). Ab ye Firebase Firestore
-mein save hota hai — is wajah se HAR device/browser par, jahan bhi site
-khulegi, wahi product turant (real-time) dikhega.
-
-Isay kaam karne ke liye Firebase Console mein 2 kaam karne hain:
-
-### 1) Firestore Database enable karein
-1. https://console.firebase.google.com par jayein → apna project
-   (`al-hadi-store-b`) kholein.
-2. Left menu se "Firestore Database" → "Create database" click karein.
-3. "Start in test mode" select karein (abhi ke liye) → Enable.
-
-### 2) Firestore Rules set karein
-Firestore Database → "Rules" tab mein ye paste karein (sab visitors
-products PADH saken, sirf jinke paas admin panel access hai woh WRITE
-kar saken — abhi ke liye simple open-write rule diya hai, jise baad mein
-Firebase Auth se aur secure kiya ja sakta hai):
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if true;   // TODO: baad mein admin-only banayein
-    }
-  }
-}
-```
-
-"Publish" dabayein.
-
-> Security note: `allow write: if true` ka matlab hai koi bhi (jo Firestore
-> ka URL/keys jaanta ho) products likh sakta hai. Filhaal admin panel
-> pehle se hi ek password se protected hai (site ke andar), lekin behtar
-> hoga ke aage chal kar Firebase Authentication (email/password) admin
-> login ke sath jorein aur rule ko `allow write: if request.auth != null;`
-> kar dein. Agar ye chahiye ho to bata dein, main add kar dunga.
-
-Deploy (Vercel/GitHub Pages) karne ke baad bas upar wale 2 steps karein —
-uske baad admin panel se add/edit/delete/hide kiya gaya har product turant
-har visitor/device par nazar aayega.
-
-## User Accounts + Liked ("pasandeeda") Products
-
-Ab site par har visitor "My Account" (header ka account icon, ya bottom
-nav ka "Account" button) se apna email/password account bana sakta hai.
-Login karne ke baad har product card aur product detail page par ek heart
-icon dikhta hai — usay tap karke product ko "liked" list mein save kiya
-ja sakta hai. Ye list Firebase Firestore mein (`users/{uid}` document,
-field `likes`) save hoti hai, is liye jis bhi device se woh user login
-kare, usay apni saari liked products wahin milengi.
-
-Isay kaam karne ke liye Firebase Console mein Firestore Rules update
-karni zaroori hain (upar wale `products` collection ke rules ke sath,
-ye naya block bhi shamil karein):
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if true;   // TODO: baad mein admin-only banayein
-    }
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-Aur Firebase Console mein "Authentication" section kholkar
-"Email/Password" sign-in method ko enable karna zaroori hai (Authentication
-→ Sign-in method → Email/Password → Enable → Save). Iske baghair
-sign up/login kaam nahi karega.
-
-## Orders Dashboard (Admin) + Order Tracking (Customer)
-
-Ab jab customer checkout complete karta hai, order Firestore ke `orders`
-collection mein bhi save hota hai (email aur Google Sheets ke sath-sath,
-jo pehle se kaam kar rahe thay).
-
-- **Admin ke liye**: Admin Panel kholein → upar "Orders" tab par tap karein.
-  Har order ka naam, phone, address, items, total aur ek status dropdown
-  (Pending / Confirmed / Shipped / Delivered / Cancelled) dikhta hai —
-  dropdown change karte hi status turant save ho jata hai aur customer
-  bhi apni taraf status update dekh sakta hai.
-- **Customer ke liye**: Account icon → "Mera Order Track Karein" par tap
-  karein. Jis device se order place kiya usi par order list khud dikh
-  jati hai; kisi doosray device se dekhna ho to apna phone number daal
-  kar "Dhoondain" dabayein.
-
-Isay kaam karne ke liye Firestore Rules mein `orders` collection ka block
-add karna zaroori hai — `FIRESTORE_RULES.txt` file mein updated rules
-already maujood hain, Firebase Console → Firestore Database → Rules mein
-paste karke "Publish" dabayein.
-
-> Security note: filhaal `orders` collection bhi products ki tarah open
-> hai (`allow read, write: if true`) — admin panel sirf app ke andar
-> password se protected hai, Firebase Auth session nahi banata. Zyada
-> security chahiye ho to Firebase Authentication admin login ke sath
-> jorna hoga; agar ye chahiye ho to bata dein.
-
-## Product share (photo ke sath) aur website link preview
-
-- **"Share this product" button** ab (jahan phone/browser support kare, jaise
-  Android/WhatsApp) product ki tasveer bhi sath attach karta hai, aur link
-  us specific product ko point karta hai (`?p=product-id`) — jo kholega,
-  seedha wahi product open hoga. Agar file-share support na ho to text +
-  link hi jayega jaisa pehle hota tha.
-- **Website ka link** (jaise home page) jab WhatsApp/Facebook/Instagram
-  mein paste kiya jaye to ab title, description, aur store logo wala
-  preview card banta hai (`assets/og-image.png`, favicon se banaya gaya
-  hai — chahen to isay apni marzi ki tasveer se replace kar sakte hain).
-- Deploy karne ke baad, `index.html` ke `<head>` mein `og:url` wala
-  comment dekh kar apna live domain add kar dein (optional hai, iske
-  baghair bhi preview kaam karega).
-- **Limitation:** yeh site static hai, is liye agar koi product ka link
-  seedha copy karke WhatsApp mein paste kare (Share button use kiye
-  baghair), to us waqt bhi generic store wala preview hi dikhega — us
-  specific product ki tasveer wala preview nahi. Har product ka apna
-  alag preview (link paste karne par bhi) chahiye ho to iske liye server
-  side par ek chhota function chahiye hoga (Vercel par possible hai) —
-  agar ye chahiye ho to bata dein.
+`/admin` sirf us email se khulta hai jo `lib/config.js` ke `ADMIN_EMAILS`
+array mein hai (`abdulhadi7888888@gmail.com`). Firebase mein isi email se
+signup karke login karein. Naya admin add karna ho to **do jagah** update
+karein: `lib/config.js` ka `ADMIN_EMAILS` aur `firestore.rules` ka
+`isAdmin()` function.
