@@ -1096,7 +1096,7 @@ function updateCartUI(){
     document.getElementById('cartTotal').textContent = money(sub+DELIVERY_CHARGE);
   }
 }
-function openCart(){ updateCartUI(); document.getElementById('cartOverlay').classList.add('open'); document.getElementById('cartDrawer').classList.add('open'); document.body.style.overflow='hidden'; }
+function openCart(){ try{ updateCartUI(); }catch(e){ console.error('updateCartUI failed:', e); } document.getElementById('cartOverlay').classList.add('open'); document.getElementById('cartDrawer').classList.add('open'); document.body.style.overflow='hidden'; }
 function closeCart(){ document.getElementById('cartOverlay').classList.remove('open'); document.getElementById('cartDrawer').classList.remove('open'); document.body.style.overflow=''; }
 
 /* ---------- checkout ---------- */

@@ -1,6 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* ===== ON-SCREEN ERROR REPORTER (debug aid) =====
+   Har JS error ko seedha screen par laal banner mein dikhata hai,
+   taake F12 kholay bina hi exact wajah pata chal sake.
+   Ise hata dena jab site final ho jaye. */
+(function(){
+  var box, list, seen = {};
+  function ensureBox(){
+    if(box) return box;
+    box = document.createElement('div');
+    box.id = '__errBox';
+    box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;'+
+      'background:#3a0d0d;color:#fff;font:12px/1.5 monospace;max-height:45vh;'+
+      'overflow:auto;padding:10px 12px;border-top:3px solid #ff4d4d;'+
+      'box-shadow:0 -4px 20px rgba(0,0,0,.6);white-space:pre-wrap;filter:none;backdrop-filter:none;';
+    var title = document.createElement('div');
+    title.textContent = '⚠ Page Errors (tap X to close)';
+    title.style.cssText = 'font-weight:bold;color:#ff8080;margin-bottom:6px;display:flex;justify-content:space-between;';
+    var closeBtn = document.createElement('span');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'cursor:pointer;padding:0 6px;';
+    closeBtn.onclick = function(){ box.remove(); box = null; };
+    title.appendChild(closeBtn);
+    list = document.createElement('div');
+    box.appendChild(title);
+    box.appendChild(list);
+    document.documentElement.appendChild(box);
+    return box;
+  }
+  function report(msg){
+    if(seen[msg]) return;
+    seen[msg] = true;
+    ensureBox();
+    var line = document.createElement('div');
+    line.style.cssText = 'padding:4px 0;border-bottom:1px solid rgba(255,255,255,.15);';
+    line.textContent = msg;
+    list.appendChild(line);
+  }
+  window.addEventListener('error', function(e){
+    var msg = e.message || 'Unknown error';
+    var where = (e.filename ? e.filename.split('/').pop() : '') + (e.lineno ? ':' + e.lineno : '');
+    report('JS Error: ' + msg + (where ? '  [' + where + ']' : ''));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    var reason = e.reason && (e.reason.message || e.reason) || 'Unknown promise rejection';
+    report('Promise Error: ' + reason);
+  });
+  document.addEventListener('securitypolicyviolation', function(e){
+    report('CSP Blocked: ' + e.violatedDirective + '  ->  ' + e.blockedURI);
+  });
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Al Hadi Store — Online Shopping in Pakistan | Quality · Trust · Style</title>
