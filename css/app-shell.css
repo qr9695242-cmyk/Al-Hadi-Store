@@ -1,0 +1,63 @@
+/* AL HADI STORE — App-style UI + interaction stability */
+html{background:var(--bg);-webkit-tap-highlight-color:transparent}
+body{perspective:none;transform:none;overflow-x:hidden}
+.header{position:sticky;top:0;z-index:80;background:var(--card);backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 4px 18px rgba(0,0,0,.16)}
+.brand img{filter:none;transform:none!important}
+.brand:hover img{transform:none!important}
+.icon-btn:hover{transform:none;box-shadow:none}
+.searchbar:focus-within{transform:none;box-shadow:inset 0 2px 6px rgba(0,0,0,.3),0 0 0 2px var(--gold-glow)}
+.btn{transform:none!important;box-shadow:0 4px 12px rgba(0,0,0,.18);transition:background .18s,box-shadow .18s,transform .12s}
+.btn:hover{transform:translateY(-1px)!important}
+.btn:active{transform:scale(.98)!important}
+.hero-banner{box-shadow:0 12px 28px rgba(0,0,0,.25);border-radius:18px}
+.hero-slide img,.hero-slide.active:hover img{transform:none!important}
+.hero-text{transform:none!important}
+.product-grid,.product-row,.row,.home-row{perspective:none}
+.pcard{transform:none!important;transition:box-shadow .18s,transform .12s!important;filter:none!important;opacity:1!important;will-change:auto}
+.pcard:hover{transform:translateY(-2px)!important;box-shadow:0 10px 24px rgba(0,0,0,.24);z-index:3}
+.pcard:active{transform:scale(.985)!important}
+.pcard-img::after{display:none!important}
+.pcard:hover .pcard-img img{transform:scale(1.03)!important}
+.section-reveal,.section-reveal.in-view{opacity:1!important;transform:none!important}
+.overlay{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(0,0,0,.62)!important}
+.modal{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.modal-bg{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(0,0,0,.62)!important}
+.modal-box{filter:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;transform:none!important;opacity:1!important;pointer-events:auto!important}
+#productModal .modal-box{max-height:calc(100dvh - 24px);overflow:auto}
+.botnav{background:rgba(20,18,15,.98)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(0,0,0,.3)}
+.botnav button{min-height:58px;font-size:.66rem;gap:4px}
+.botnav button:active{transform:scale(.96)}
+@media(max-width:760px){
+ body{padding-bottom:68px!important}
+ .header{position:sticky}
+ .header-main{padding:10px 12px!important;gap:9px}
+ .brand-txt span{display:none}
+ .brand-txt b{font-size:.9rem}
+ .searchbar{order:3;width:100%;height:42px}
+ .header-main{flex-wrap:wrap}
+ .header-actions{margin-left:auto;gap:2px}
+ .header-actions .icon-btn{width:38px;height:38px}
+ .header-actions .account-btn,.header-actions #adminBtn{display:none}
+ .catbar{display:none}
+ .marquee{margin-top:0}
+ main.wrap{padding-left:12px!important;padding-right:12px!important}
+ .hero-banner{min-height:230px;border-radius:16px;margin-top:12px}
+ .hero-text{padding:24px!important}
+ .hero-text h2{font-size:1.8rem}
+ .cat-circles-row{overflow-x:auto;padding-bottom:4px}
+ .cat-circle{flex:0 0 auto}
+ .product-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+ .pcard{border-radius:13px}
+ .pcard-body{padding:10px!important}
+ .pcard-add{min-height:38px}
+ .modal{padding:10px 8px!important;align-items:flex-end!important}
+ #productModal{padding:0!important}
+ #productModal .modal-box{width:100%;max-width:none;border-radius:20px 20px 0 0;max-height:94dvh;margin:0}
+ #productModal .modal-close{top:10px;right:10px}
+ .modal-box{border-radius:18px}
+ .drawer{width:min(100%,420px)!important}
+ footer{padding-bottom:12px}
+}
+@media(min-width:761px){
+ main.wrap{max-width:1180px}
+}

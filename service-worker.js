@@ -6,9 +6,11 @@
 // IMPORTANT: bump CACHE_NAME any time this file or the precache list
 // changes, so old phones/browsers throw away their stale cache instead of
 // serving an outdated copy of the site indefinitely.
-const CACHE_NAME = 'al-hadi-store-v5';
+const CACHE_NAME = 'al-hadi-store-v6';
 const STATIC_ASSETS = [
   '/css/style.css',
+  '/css/theme-3d.css',
+  '/css/app-shell.css',
   '/manifest.json',
   '/assets/icons/icon-192.png',
   '/assets/icons/icon-512.png'
