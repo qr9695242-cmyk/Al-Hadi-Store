@@ -332,7 +332,7 @@ svg{ display:block; }
 .modal{ position:fixed; inset:0; z-index:110; display:flex; align-items:flex-start; justify-content:center; padding:28px 16px; overflow-y:auto; opacity:0; visibility:hidden; transition:opacity .25s, visibility .25s; }
 .modal.open{ opacity:1; visibility:visible; }
 .modal-bg{ position:fixed; inset:0; background:rgba(15,27,46,.55); backdrop-filter:blur(3px); }
-.modal-box{ position:relative; background:var(--card); border-radius:18px; width:100%; max-width:920px; box-shadow:var(--shadow-lg); z-index:2; margin:auto; overflow:hidden; }
+.modal-box{ position:relative; background:var(--card); border:1px solid rgba(232,201,101,.35); border-radius:18px; width:100%; max-width:920px; min-height:80px; box-shadow:var(--shadow-lg), 0 0 0 1px rgba(0,0,0,.4); z-index:5; margin:auto; overflow:hidden; }
 .modal-box.sm{ max-width:460px; }
 .modal-close{ position:absolute; top:14px; right:14px; z-index:5; background:rgba(255,255,255,.9); border:none; width:40px; height:40px; border-radius:50%; color:var(--navy); display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm); transition:transform .15s, background .2s; }
 .modal-close:hover{ background:#fff; transform:rotate(90deg); }

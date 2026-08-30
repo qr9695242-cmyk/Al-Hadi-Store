@@ -513,7 +513,15 @@ function openProduct(id, fromURL){
   trackRecentlyViewed(id);
   PD = { product:p, index:0, size:(p.sizes&&p.sizes.length?p.sizes[0]:null), qty:1, shareFile:null, shareFileFor:null };
   prefetchShareImage(p);
-  renderDetail();
+  try{
+    renderDetail();
+  }catch(e){
+    console.error('renderDetail failed:', e);
+    if(window.dispatchEvent){ window.dispatchEvent(new ErrorEvent('error', {message:'renderDetail crashed: ' + (e && e.message || e)})); }
+    document.getElementById('productModal').classList.remove('open');
+    document.body.style.overflow='';
+    return;
+  }
   document.getElementById('productModal').classList.add('open');
   document.body.style.overflow='hidden';
   updateProductSEO(p);
@@ -536,6 +544,7 @@ function renderDetail(){
   const imgs = p.images||[];
   const disc = discountPct(p);
   const el = document.getElementById('productDetail');
+  if(!el){ throw new Error('productDetail element not found in DOM'); }
   const thumbs = imgs.map((im,i)=>'<img src="'+im.src+'" alt="" class="'+(i===PD.index?'active':'')+'" onclick="pdGo('+i+')">').join('');
   const sizes = (p.sizes||[]).map(s=>'<button class="'+(s===PD.size?'active':'')+'" onclick="pdSize('+JSON.stringify(escapeHtml(s)).replace(/"/g,'&quot;')+')">'+escapeHtml(s)+'</button>').join('');
   const details = (p.details||[]).map(d=>'<li>'+escapeHtml(d)+'</li>').join('');
