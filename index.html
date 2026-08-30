@@ -1,58 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>
-/* ===== ON-SCREEN ERROR REPORTER (debug aid) =====
-   Har JS error ko seedha screen par laal banner mein dikhata hai,
-   taake F12 kholay bina hi exact wajah pata chal sake.
-   Ise hata dena jab site final ho jaye. */
-(function(){
-  var box, list, seen = {};
-  function ensureBox(){
-    if(box) return box;
-    box = document.createElement('div');
-    box.id = '__errBox';
-    box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;'+
-      'background:#3a0d0d;color:#fff;font:12px/1.5 monospace;max-height:45vh;'+
-      'overflow:auto;padding:10px 12px;border-top:3px solid #ff4d4d;'+
-      'box-shadow:0 -4px 20px rgba(0,0,0,.6);white-space:pre-wrap;filter:none;backdrop-filter:none;';
-    var title = document.createElement('div');
-    title.textContent = '⚠ Page Errors (tap X to close)';
-    title.style.cssText = 'font-weight:bold;color:#ff8080;margin-bottom:6px;display:flex;justify-content:space-between;';
-    var closeBtn = document.createElement('span');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = 'cursor:pointer;padding:0 6px;';
-    closeBtn.onclick = function(){ box.remove(); box = null; };
-    title.appendChild(closeBtn);
-    list = document.createElement('div');
-    box.appendChild(title);
-    box.appendChild(list);
-    document.documentElement.appendChild(box);
-    return box;
-  }
-  function report(msg){
-    if(seen[msg]) return;
-    seen[msg] = true;
-    ensureBox();
-    var line = document.createElement('div');
-    line.style.cssText = 'padding:4px 0;border-bottom:1px solid rgba(255,255,255,.15);';
-    line.textContent = msg;
-    list.appendChild(line);
-  }
-  window.addEventListener('error', function(e){
-    var msg = e.message || 'Unknown error';
-    var where = (e.filename ? e.filename.split('/').pop() : '') + (e.lineno ? ':' + e.lineno : '');
-    report('JS Error: ' + msg + (where ? '  [' + where + ']' : ''));
-  });
-  window.addEventListener('unhandledrejection', function(e){
-    var reason = e.reason && (e.reason.message || e.reason) || 'Unknown promise rejection';
-    report('Promise Error: ' + reason);
-  });
-  document.addEventListener('securitypolicyviolation', function(e){
-    report('CSP Blocked: ' + e.violatedDirective + '  ->  ' + e.blockedURI);
-  });
-})();
-</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Al Hadi Store — Online Shopping in Pakistan | Quality · Trust · Style</title>
@@ -1023,7 +971,7 @@
 <a href="https://wa.me/923134586476?text=Assalam-o-Alaikum%2C%20mujhe%20order%20ke%20baray%20mein%20madad%20chahiye"
    target="_blank" rel="noopener"
    aria-label="WhatsApp par support"
-   style="position:fixed;right:18px;bottom:84px;z-index:9999;width:56px;height:56px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.25);text-decoration:none;">
+   style="position:fixed;right:16px;bottom:86px;z-index:9999;width:50px;height:50px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35);border:3px solid #fff;text-decoration:none;">
   <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><path d="M20.52 3.48A11.86 11.86 0 0 0 12.06 0C5.5 0 .18 5.32.18 11.88c0 2.1.55 4.14 1.6 5.94L0 24l6.35-1.66a11.86 11.86 0 0 0 5.7 1.45h.01c6.56 0 11.88-5.32 11.88-11.88 0-3.17-1.24-6.15-3.42-8.43zM12.06 21.6h-.01a9.7 9.7 0 0 1-4.94-1.35l-.35-.21-3.77.99 1-3.67-.23-.38a9.66 9.66 0 0 1-1.48-5.1c0-5.35 4.35-9.7 9.71-9.7 2.6 0 5.04 1.01 6.87 2.85a9.63 9.63 0 0 1 2.84 6.87c0 5.35-4.35 9.7-9.7 9.7zm5.32-7.27c-.29-.15-1.72-.85-1.99-.95-.27-.1-.46-.15-.66.15-.19.29-.75.95-.92 1.15-.17.19-.34.22-.63.07-.29-.15-1.22-.45-2.32-1.43-.86-.77-1.44-1.71-1.6-2-.17-.29-.02-.45.13-.6.13-.13.29-.34.43-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.07-.15-.66-1.59-.9-2.18-.24-.57-.48-.5-.66-.51h-.56c-.19 0-.51.07-.78.36-.27.29-1.02 1-1.02 2.44s1.05 2.83 1.19 3.03c.15.19 2.06 3.14 4.99 4.4.7.3 1.24.48 1.67.61.7.22 1.34.19 1.84.12.56-.08 1.72-.7 1.96-1.38.24-.68.24-1.26.17-1.38-.07-.12-.26-.19-.55-.34z"/></svg>
 </a>
 
