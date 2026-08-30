@@ -203,6 +203,26 @@
     </div>
   </section>
 
+  <!-- ============ APP COMMAND BAR ============ -->
+  <section class="app-command" aria-label="Quick controls">
+    <div class="app-command-main">
+      <div class="app-welcome">
+        <span class="app-live-dot"></span>
+        <div><b>Al Hadi Store</b><small>Fast shopping · Secure checkout · COD available</small></div>
+      </div>
+      <button class="app-search-jump" onclick="focusResults()" aria-label="Search products">
+        <span>⌕</span><span>Search anything…</span><kbd>⌘ K</kbd>
+      </button>
+    </div>
+    <div class="app-quick-actions">
+      <button onclick="document.getElementById('shop').scrollIntoView({behavior:'smooth'});setTimeout(function(){document.getElementById('searchInput')?.focus()},350)">🛍️ <span>Shop</span></button>
+      <button onclick="openCart()">🛒 <span>Cart</span><i id="quickCartBadge">0</i></button>
+      <button onclick="openOrdersModal()">📦 <span>Orders</span></button>
+      <button onclick="openAccount()">👤 <span>Account</span></button>
+      <button onclick="openStoreSettings()">⚙️ <span>Settings</span></button>
+    </div>
+  </section>
+
   <!-- ============ SHOP BY CATEGORY ============ -->
   <section class="cat-circles">
     <div class="cat-circles-head"><h2>Shop by Category</h2></div>
@@ -314,6 +334,28 @@
     <button onclick="openAccount()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</button>
   </div>
 </nav>
+
+<!-- ============ STORE SETTINGS ============ -->
+<div class="store-settings" id="storeSettings" aria-hidden="true">
+  <div class="settings-backdrop" onclick="closeStoreSettings()"></div>
+  <aside class="settings-panel" role="dialog" aria-modal="true" aria-label="Store settings">
+    <div class="settings-head"><div><span class="settings-kicker">AL HADI STORE</span><h3>App Settings</h3></div><button onclick="closeStoreSettings()" aria-label="Close settings">×</button></div>
+    <div class="settings-profile"><div class="settings-avatar">AH</div><div><b>Welcome back</b><span>Manage your shopping experience</span></div></div>
+    <div class="settings-group">
+      <button class="setting-row" onclick="toggleStoreTheme()"><span>🌙<b>Dark mode</b><small>Switch store appearance</small></span><em class="setting-switch" id="themeSwitch"></em></button>
+      <button class="setting-row" onclick="toggleCompactMode()"><span>📐<b>Compact products</b><small>Show more products on screen</small></span><em class="setting-switch" id="compactSwitch"></em></button>
+      <button class="setting-row" onclick="openNotifications();closeStoreSettings()"><span>🔔<b>Notifications</b><small>Deals and order updates</small></span><strong>›</strong></button>
+    </div>
+    <div class="settings-group">
+      <div class="settings-title">QUICK ACCESS</div>
+      <button class="setting-link" onclick="document.getElementById('payment').scrollIntoView({behavior:'smooth'});closeStoreSettings()">💳 Payment options <span>›</span></button>
+      <a class="setting-link" href="shipping-policy.html">🚚 Shipping policy <span>›</span></a>
+      <a class="setting-link" href="refund-policy.html">↩️ Refund policy <span>›</span></a>
+      <a class="setting-link" href="faq.html">❓ Help & FAQ <span>›</span></a>
+    </div>
+    <div class="settings-footer">Al Hadi Store · Quality · Trust · Style</div>
+  </aside>
+</div>
 
 <!-- ============ CART DRAWER ============ -->
 <div class="overlay" id="cartOverlay" onclick="closeCart()"></div>
@@ -967,6 +1009,34 @@
 
 <!-- toast -->
 <div class="toast" id="toast"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg><span id="toastMsg"></span></div>
+
+<script>
+(function(){
+  const KEY='alhadi_store_ui';
+  function state(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return {}}}
+  function save(o){localStorage.setItem(KEY,JSON.stringify(o))}
+  window.openStoreSettings=function(){
+    const el=document.getElementById('storeSettings'); if(!el)return; el.classList.add('open'); el.setAttribute('aria-hidden','false'); document.body.classList.add('settings-open'); updateSettingUI();
+  };
+  window.closeStoreSettings=function(){
+    const el=document.getElementById('storeSettings'); if(!el)return; el.classList.remove('open'); el.setAttribute('aria-hidden','true'); document.body.classList.remove('settings-open');
+  };
+  window.toggleStoreTheme=function(){
+    const st=state(); st.dark=!st.dark; save(st); applyState(); updateSettingUI();
+  };
+  window.toggleCompactMode=function(){
+    const st=state(); st.compact=!st.compact; save(st); applyState(); updateSettingUI();
+  };
+  function applyState(){const st=state(); document.documentElement.classList.toggle('app-dark',!!st.dark); document.documentElement.classList.toggle('app-compact',!!st.compact)}
+  function updateSettingUI(){const st=state(); document.getElementById('themeSwitch')?.classList.toggle('on',!!st.dark); document.getElementById('compactSwitch')?.classList.toggle('on',!!st.compact)}
+  applyState();
+  document.addEventListener('keydown',function(e){if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();focusResults();}});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeStoreSettings();});
+  window.addEventListener('storage',applyState);
+  window.updateQuickCart=function(){const a=document.getElementById('cartCount'),b=document.getElementById('quickCartBadge'); if(a&&b)b.textContent=a.textContent||'0'};
+  setInterval(window.updateQuickCart,600);
+})();
+</script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
