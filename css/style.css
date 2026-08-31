@@ -101,12 +101,12 @@ svg{ display:block; }
 .cat-circles{ padding:20px 0 4px; }
 .cat-circles-head{ text-align:center; margin-bottom:16px; }
 .cat-circles-head h2{ font-size:1.05rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--navy); }
-.cat-circles-row{ display:flex; gap:22px; overflow-x:auto; padding:4px 4px 10px; scrollbar-width:none; justify-content:center; flex-wrap:wrap; }
+.cat-circles-row{ display:flex; gap:16px; overflow-x:auto; padding:4px 4px 14px; scrollbar-width:none; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; }
 .cat-circles-row::-webkit-scrollbar{ display:none; }
-.cat-circle{ display:flex; flex-direction:column; align-items:center; gap:9px; background:none; border:none; flex-shrink:0; width:88px; }
-.cat-circle .ring{ width:74px; height:74px; border-radius:50%; background:linear-gradient(160deg,var(--card),#0d0b09); border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--gold); transition:border-color .2s, transform .18s, box-shadow .2s; box-shadow:var(--shadow-sm); }
+.cat-circle{ display:flex; flex-direction:column; align-items:center; gap:8px; background:none; border:none; flex-shrink:0; width:72px; scroll-snap-align:start; }
+.cat-circle .ring{ width:62px; height:62px; border-radius:50%; background:linear-gradient(160deg,var(--card),#0d0b09); border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--gold); transition:border-color .2s, transform .18s, box-shadow .2s; box-shadow:var(--shadow-sm); }
 .cat-circle:hover .ring{ border-color:var(--gold); transform:translateY(-3px); box-shadow:var(--shadow-md); }
-.cat-circle span{ font-size:.74rem; font-weight:600; color:var(--ink); text-align:center; line-height:1.25; }
+.cat-circle span{ font-size:.68rem; font-weight:600; color:var(--ink); text-align:center; line-height:1.2; }
 .cat-circle.active .ring{ border-color:var(--gold); background:linear-gradient(160deg,var(--gold),var(--gold-2)); color:#161310; }
 
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 26px; font-weight:700; font-size:.9rem; border-radius:999px; border:2px solid transparent; transition:transform .15s, background .2s, color .2s, border-color .2s, box-shadow .2s; white-space:nowrap; }

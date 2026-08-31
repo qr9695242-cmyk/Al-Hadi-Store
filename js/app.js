@@ -526,6 +526,20 @@ document.addEventListener('click', function(e){
   const bar = document.querySelector('.searchbar');
   if(box && bar && !bar.contains(e.target)) box.classList.remove('show');
 });
+/* Handles ?q=... links, e.g. from Google's Sitelinks Search Box (see the
+   SearchAction schema in index.html) — pre-fills and applies the search term.
+   Called after products are loaded (base catalog + Firestore sync), same as
+   openProductFromURL, so it always has real data to filter against. */
+function applySearchFromURL(){
+  const q = new URLSearchParams(location.search).get('q');
+  if(!q) return;
+  const input = document.getElementById('searchInput');
+  if(input) input.value = q;
+  currentSearch = q.trim();
+  renderProducts();
+  const shop = document.getElementById('shop');
+  if(shop) shop.scrollIntoView({behavior:'smooth'});
+}
 function renderSearchSuggestions(q){
   const box = document.getElementById('searchSuggest');
   if(!box) return;
@@ -2118,6 +2132,7 @@ function watchCustomProducts(){
     renderProducts();
     renderAdminProductList();
     openProductFromURL();
+    applySearchFromURL();
   }, function(err){
     console.error('Firestore sync error:', err);
     toast('Products sync mein masla — internet ya Firebase settings check karein');
@@ -2616,6 +2631,7 @@ function applyProducts(data){
   buildCategories();
   renderProducts();
   openProductFromURL();
+  applySearchFromURL();
 }
 function skeletons(){
   const g=document.getElementById('productGrid');
