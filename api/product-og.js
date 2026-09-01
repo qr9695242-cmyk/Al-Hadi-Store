@@ -25,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { loadStaticProducts, fetchFirestoreProductById, isVisible, extractProductId, slugUrl } = require('./_firestore-products');
 
-const SITE_URL = 'https://alhadi.store';
+const SITE_URL = 'https://al-hadi-store.vercel.app';
 
 function escapeAttr(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

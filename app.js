@@ -594,7 +594,7 @@ function injectProductSchema(p){
       "priceCurrency":"PKR",
       "price": p.price,
       "availability": (p.stockStatus==='out') ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
-      "url": "https://alhadi.store/?product="+p.id
+      "url": "https://al-hadi-store.vercel.app/?product="+p.id
     }
   });
 }

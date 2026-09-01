@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://alhadi.store/sitemap.xml
+Sitemap: https://al-hadi-store.vercel.app/sitemap.xml

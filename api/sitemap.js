@@ -12,7 +12,7 @@
 
 const { loadStaticProducts, fetchAllFirestoreProducts, mergeProducts, isVisible, slugUrl } = require('./_firestore-products');
 
-const SITE_URL = 'https://alhadi.store';
+const SITE_URL = 'https://al-hadi-store.vercel.app';
 
 const STATIC_PAGES = [
   { path: '/', changefreq: 'daily', priority: '1.0' },

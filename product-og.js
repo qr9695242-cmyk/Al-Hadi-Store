@@ -10,7 +10,7 @@
 // so WhatsApp/Facebook/Instagram show the right picture in the link preview.
 
 const PROJECT_ID = 'al-hadi-store-b'; // <-- change this if your Firebase project id is different
-const SITE_URL = 'https://alhadi.store'; // <-- change this if your live domain is different
+const SITE_URL = 'https://al-hadi-store.vercel.app'; // <-- change this if your live domain is different
 
 function escapeHtml(str) {
   return String(str || '')

@@ -320,7 +320,7 @@ module.exports = async (req, res) => {
       redirect: 'follow',
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; AlHadiStoreBot/1.0; +https://alhadi.store)',
+        'User-Agent': 'Mozilla/5.0 (compatible; AlHadiStoreBot/1.0; +https://al-hadi-store.vercel.app)',
         'Accept': 'text/html,application/xhtml+xml'
       }
     });
