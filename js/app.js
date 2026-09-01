@@ -99,6 +99,10 @@ function lockBodyScroll(){
     b.top = (-SCROLL_LOCK_Y) + 'px';
     b.left = '0'; b.right = '0'; b.width = '100%';
     b.overflow = 'hidden';
+    // iOS Safari kabhi kabhi "position:fixed" lagane ke turant baad naye
+    // content (jaisa product image) ko paint karna bhool jata hai jab tak
+    // koi reflow force na ho. Yeh line browser ko turant redraw karwati hai.
+    void document.body.offsetHeight;
   }
   SCROLL_LOCK_COUNT++;
 }

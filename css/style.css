@@ -331,11 +331,11 @@ svg{ display:block; }
 .sumrow.total .amt{ color:var(--deal); }
 
 /* ---------- Modal ---------- */
-.modal{ position:fixed; inset:0; height:100vh; height:100dvh; z-index:110; display:flex; align-items:flex-start; justify-content:center; padding:28px 16px; overflow-y:auto; -webkit-overflow-scrolling:touch; opacity:0; visibility:hidden; transition:opacity .25s, visibility .25s; }
+.modal{ position:fixed; inset:0; height:100vh; height:100dvh; z-index:110; display:flex; align-items:flex-start; justify-content:center; padding:28px 16px; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; opacity:0; visibility:hidden; transition:opacity .25s, visibility .25s; }
 @media(max-width:720px){ .modal{ padding:12px 8px; } }
 .modal.open{ opacity:1; visibility:visible; }
 .modal-bg{ position:fixed; inset:0; background:rgba(15,27,46,.55); backdrop-filter:none; -webkit-backdrop-filter:none; z-index:0; }
-.modal-box{ position:relative; background:var(--card); border:1px solid rgba(214,39,44,.35); border-radius:18px; width:100%; max-width:920px; min-height:80px; box-shadow:var(--shadow-lg), 0 0 0 1px rgba(0,0,0,.4); z-index:10; margin:auto; overflow:hidden; pointer-events:auto; }
+.modal-box{ position:relative; background:var(--card); border:1px solid rgba(214,39,44,.35); border-radius:18px; width:100%; max-width:920px; min-height:80px; box-shadow:var(--shadow-lg), 0 0 0 1px rgba(0,0,0,.4); z-index:10; margin:auto; overflow:hidden; pointer-events:auto; -webkit-transform:translateZ(0); transform:translateZ(0); }
 .modal-box.sm{ max-width:460px; }
 .modal-close{ position:absolute; top:14px; right:14px; z-index:5; background:rgba(255,255,255,.9); border:none; width:40px; height:40px; border-radius:50%; color:var(--navy); display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm); transition:transform .15s, background .2s; }
 .modal-close:hover{ background:#fff; transform:rotate(90deg); }
@@ -352,7 +352,7 @@ svg{ display:block; }
    nazar aa jayen (laptop wale full-square zoom se bachne ke liye). */
 @media(max-width:720px){ .pd-main{ aspect-ratio:auto; height:52vw; max-height:320px; min-height:220px; } }
 .pd-main{position:relative;overflow:hidden;background:#fff;}
-.pd-main img{ width:100%; height:100%; display:block; object-fit:contain; object-position:center; background:#fff; }
+.pd-main img{ width:100%; height:100%; display:block; object-fit:contain; object-position:center; background:#fff; -webkit-transform:translateZ(0); transform:translateZ(0); -webkit-backface-visibility:hidden; backface-visibility:hidden; }
 .pd-nav{ position:absolute; top:50%; transform:translateY(-50%); width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.9); border:none; color:var(--navy); display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm); }
 .pd-nav.prev{ left:12px; } .pd-nav.next{ right:12px; }
 .pd-dots{ position:absolute; left:0; right:0; bottom:10px; display:flex; align-items:center; justify-content:center; gap:5px; z-index:2; pointer-events:none; }
