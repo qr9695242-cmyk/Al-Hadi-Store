@@ -637,8 +637,6 @@ function openProduct(id, fromURL){
   }
 }
 function closeProduct(){
-  const zoomOverlay = document.getElementById('pdZoomOverlay');
-  if(zoomOverlay) zoomOverlay.classList.remove('open');
   document.getElementById('productModal').classList.remove('open'); unlockBodyScroll();
   resetPageSEO();
   if(new URLSearchParams(location.search).get(PRODUCT_URL_PARAM)){
@@ -659,8 +657,7 @@ function renderDetail(){
   el.innerHTML =
     '<div class="pd-gallery">'+
       '<div class="pd-main" id="pdMainStage">'+
-        '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'" onclick="openZoom()">'+
-        '<span class="pd-zoom-hint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M9 11h4M11 9v4"/></svg>Zoom</span>'+
+        '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'">'+
         (imgs.length>1 ? '<button class="pd-nav prev" onclick="pdSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>' : '')+
         (imgs.length>1 ? '<button class="pd-nav next" onclick="pdSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>' : '')+
         (imgs.length>1 ? '<div class="pd-dots" id="pdDots">'+imgs.map((_,i)=>'<span class="'+(i===PD.index?'active':'')+'"></span>').join('')+'</div>' : '')+
@@ -1051,125 +1048,6 @@ function pdGo(i){
 }
 function pdSlide(d){ const n=PD.product.images.length; pdGo((PD.index+d+n)%n); }
 
-/* ---------- fullscreen image zoom (pinch, double-tap, drag-to-pan) ---------- */
-const ZM = { scale:1, x:0, y:0, startDist:0, startScale:1, startX:0, startY:0, panX:0, panY:0, dragging:false, lastTapTime:0 };
-function zoomEls(){ return { overlay: document.getElementById('pdZoomOverlay'), img: document.getElementById('pdZoomImg'), stage: document.getElementById('pdZoomStage') }; }
-function zoomApplyTransform(){
-  const { img } = zoomEls();
-  if(!img) return;
-  img.style.transform = 'translate('+ZM.x+'px,'+ZM.y+'px) scale('+ZM.scale+')';
-}
-function zoomReset(instant){
-  ZM.scale=1; ZM.x=0; ZM.y=0; ZM.panX=0; ZM.panY=0;
-  const { img } = zoomEls();
-  if(img){ if(instant) img.classList.add('no-transition'); zoomApplyTransform(); if(instant) requestAnimationFrame(()=>img.classList.remove('no-transition')); }
-}
-function openZoom(){
-  if(!PD || !PD.product) return;
-  const imgs = PD.product.images || [];
-  if(!imgs.length) return;
-  const { overlay, img } = zoomEls();
-  if(!overlay || !img) return;
-  img.src = imgs[PD.index].src;
-  img.alt = PD.product.name || '';
-  zoomReset(true);
-  overlay.classList.add('open');
-  lockBodyScroll();
-  const nav = imgs.length > 1;
-  document.getElementById('pdZoomPrev').style.display = nav ? 'flex' : 'none';
-  document.getElementById('pdZoomNext').style.display = nav ? 'flex' : 'none';
-}
-function closeZoom(){
-  const { overlay } = zoomEls();
-  if(overlay) overlay.classList.remove('open');
-  zoomReset(true);
-  unlockBodyScroll();
-}
-function zoomSlide(d){
-  if(!PD || !PD.product) return;
-  const n = PD.product.images.length; if(!n) return;
-  pdGo((PD.index + d + n) % n);
-  const { img } = zoomEls();
-  if(img){ img.src = PD.product.images[PD.index].src; zoomReset(true); }
-}
-function zoomToggleDoubleTap(clientX, clientY){
-  const { stage } = zoomEls();
-  if(ZM.scale > 1){ zoomReset(false); return; }
-  const rect = stage.getBoundingClientRect();
-  ZM.scale = 2.5;
-  ZM.x = (rect.width/2 - (clientX - rect.left)) * (ZM.scale - 1) / ZM.scale;
-  ZM.y = (rect.height/2 - (clientY - rect.top)) * (ZM.scale - 1) / ZM.scale;
-  zoomApplyTransform();
-}
-(function setupZoomGestures(){
-  document.addEventListener('DOMContentLoaded', function(){
-    const stage = document.getElementById('pdZoomStage');
-    const overlay = document.getElementById('pdZoomOverlay');
-    if(!stage || !overlay) return;
-
-    overlay.addEventListener('click', function(e){ if(e.target === overlay) closeZoom(); });
-
-    stage.addEventListener('touchstart', function(e){
-      if(e.touches.length === 2){
-        const [a,b] = e.touches;
-        ZM.startDist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-        ZM.startScale = ZM.scale;
-      } else if(e.touches.length === 1){
-        const now = Date.now();
-        if(now - ZM.lastTapTime < 300){
-          zoomToggleDoubleTap(e.touches[0].clientX, e.touches[0].clientY);
-        }
-        ZM.lastTapTime = now;
-        ZM.dragging = true;
-        ZM.startX = e.touches[0].clientX - ZM.x;
-        ZM.startY = e.touches[0].clientY - ZM.y;
-      }
-    }, { passive:true });
-
-    stage.addEventListener('touchmove', function(e){
-      if(e.touches.length === 2){
-        e.preventDefault();
-        const [a,b] = e.touches;
-        const dist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-        ZM.scale = Math.min(5, Math.max(1, ZM.startScale * (dist / ZM.startDist)));
-        zoomApplyTransform();
-      } else if(e.touches.length === 1 && ZM.dragging && ZM.scale > 1){
-        e.preventDefault();
-        ZM.x = e.touches[0].clientX - ZM.startX;
-        ZM.y = e.touches[0].clientY - ZM.startY;
-        zoomApplyTransform();
-      }
-    }, { passive:false });
-
-    stage.addEventListener('touchend', function(e){
-      ZM.dragging = false;
-      if(ZM.scale <= 1) zoomReset(false);
-    });
-
-    // desktop: double-click to toggle zoom, drag with mouse while zoomed
-    stage.addEventListener('dblclick', function(e){ zoomToggleDoubleTap(e.clientX, e.clientY); });
-    stage.addEventListener('mousedown', function(e){
-      if(ZM.scale <= 1) return;
-      ZM.dragging = true;
-      ZM.startX = e.clientX - ZM.x;
-      ZM.startY = e.clientY - ZM.y;
-    });
-    window.addEventListener('mousemove', function(e){
-      if(!ZM.dragging || ZM.scale <= 1) return;
-      ZM.x = e.clientX - ZM.startX;
-      ZM.y = e.clientY - ZM.startY;
-      zoomApplyTransform();
-    });
-    window.addEventListener('mouseup', function(){ ZM.dragging = false; });
-
-    document.addEventListener('keydown', function(e){
-      if(!overlay.classList.contains('open')) return;
-      if(e.key === 'Escape') closeZoom();
-      if(e.key === 'ArrowLeft') zoomSlide(-1);
-      if(e.key === 'ArrowRight') zoomSlide(1);
-    });
-  });
-})();
 function pdSize(s){ PD.size=s; document.querySelectorAll('.size-opts button').forEach(b=>b.classList.toggle('active', b.textContent===s)); }
 function pdQty(d){ PD.qty=Math.max(1,PD.qty+d); document.getElementById('pdQty').textContent=PD.qty; }
 function pdAddToCart(buyNow){
