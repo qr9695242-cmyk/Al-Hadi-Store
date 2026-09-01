@@ -53,8 +53,16 @@ service cloud.firestore {
       allow create: if true;
       allow update: if isAdmin() ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['cancelRequested', 'cancelRequestedAt', 'returnRequested', 'returnReason', 'returnRequestedAt']);
+          .hasOnly(['cancelRequested', 'cancelRequestedAt', 'returnRequested', 'returnReason', 'returnRequestedAt', 'customerFcmToken']);
       allow delete: if isAdmin();
+    }
+
+    // Admin push-notification tokens (Firebase Cloud Messaging). Only the
+    // admin account itself can register/read/remove its own device tokens —
+    // /api/notify.js reads this collection with the Admin SDK, which
+    // bypasses these rules entirely (server-side, not a browser client).
+    match /admin_tokens/{tokenId} {
+      allow read, write: if isAdmin();
     }
 
     // Aggregate analytics counters (site visits, product views, add-to-cart

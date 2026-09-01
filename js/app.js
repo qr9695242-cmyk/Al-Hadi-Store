@@ -922,6 +922,65 @@ function updateNotifBadge(){
   if(NOTIF_UNREAD.length){ el.style.display='flex'; el.textContent = NOTIF_UNREAD.length; }
   else { el.style.display='none'; }
 }
+
+/* ---------- Real push notifications (Firebase Cloud Messaging) ----------
+   These work even when the site/app is closed — a real phone notification,
+   not just the in-app bell above. Two flows:
+   1) Admin: gets a push the moment a new order comes in.
+   2) Customer: gets a push when their order's status changes.
+   Both are opt-in (browser permission prompt) and fail silently on
+   browsers/HTTP contexts that don't support it — nothing else breaks. */
+
+function pushSupported(){
+  return typeof firebase !== 'undefined' && !!firebase.messaging &&
+         'serviceWorker' in navigator && 'Notification' in window &&
+         typeof FCM_VAPID_KEY !== 'undefined' &&
+         FCM_VAPID_KEY && FCM_VAPID_KEY.indexOf('PASTE_YOUR') !== 0;
+}
+
+async function getPushToken(){
+  if(!pushSupported()) return null;
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted') return null;
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const messaging = firebase.messaging();
+    return await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+  }catch(e){ console.warn('Push token fetch skipped:', e && e.message); return null; }
+}
+
+// Called after a successful admin login — saves this device's push token
+// so /api/notify can alert the admin the moment a new order lands.
+async function enableAdminPush(){
+  try{
+    const token = await getPushToken();
+    if(!token) return;
+    await firebase.firestore().collection('admin_tokens').doc(token).set({
+      token: token,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){ console.warn('Admin push setup skipped:', e && e.message); }
+}
+
+// Called right after an order is saved — saves this device's push token on
+// the order doc so the customer can be pushed when the status changes.
+async function enableCustomerPushForOrder(orderId){
+  try{
+    const token = await getPushToken();
+    if(!token || !orderId) return;
+    await firebase.firestore().collection('orders').doc(orderId).update({ customerFcmToken: token });
+  }catch(e){ console.warn('Customer push setup skipped:', e && e.message); }
+}
+
+// Fires the server-side send — never blocks the UI if it fails.
+function triggerPushNotify(type, orderId){
+  if(typeof NOTIFY_SECRET === 'undefined') return;
+  fetch('/api/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: type, orderId: orderId, secret: NOTIFY_SECRET })
+  }).catch(function(){ /* non-blocking */ });
+}
 function openNotifications(){
   const box = document.getElementById('notifList');
   if(!NOTIF_UNREAD.length){
@@ -1301,6 +1360,8 @@ function saveOrderToFirestore(orderData){
     .then(function(docRef){
       LAST_ORDER_ID = docRef.id;
       addMyOrderId(docRef.id);
+      triggerPushNotify('new_order', docRef.id);
+      enableCustomerPushForOrder(docRef.id);
     })
     .catch(function(error){
       console.warn('⚠️ Order could not be saved for tracking (non-blocking):', error);
@@ -2003,6 +2064,7 @@ function submitAdminLogin(e){
       closeAdminLogin();
       openAdminPanel();
       toast('Welcome, admin!', 'success');
+      enableAdminPush();
     })
     .catch(function(error){
       errEl.textContent = friendlyAuthError(error);
@@ -2996,7 +3058,7 @@ function updateOrderStatus(id, status){
   if(typeof firebase === 'undefined' || !firebase.firestore) return;
   const normalized = String(status||'pending').trim().toLowerCase();
   firebase.firestore().collection('orders').doc(id).update({status: normalized})
-    .then(function(){ toast('Order status update ho gaya'); })
+    .then(function(){ toast('Order status update ho gaya'); triggerPushNotify('order_status', id); })
     .catch(function(){ toast('Status update fail ho gaya'); });
 }
 

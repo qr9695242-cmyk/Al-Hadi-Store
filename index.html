@@ -1019,12 +1019,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=5"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="js/firebase-config.js?v=6"></script>
 <script src="js/cloudinary-config.js?v=2"></script>
 
 <script src="js/products-data.js?v=4"></script>
 
-<script src="js/app.js?v=12"></script>
+<script src="js/app.js?v=13"></script>
 <script src="js/tilt-3d.js?v=1"></script>
 
 <!-- PWA: register service worker for offline shell + Add-to-Home-Screen -->
@@ -1033,6 +1034,10 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('/service-worker.js').catch(function (err) {
       console.warn('Service worker registration failed:', err);
+    });
+    // Separate service worker: background push notifications (FCM).
+    navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(function (err) {
+      console.warn('Push notification service worker registration failed:', err);
     });
   });
 }
