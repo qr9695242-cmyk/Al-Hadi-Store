@@ -332,6 +332,7 @@ svg{ display:block; }
 
 /* ---------- Modal ---------- */
 .modal{ position:fixed; inset:0; height:100vh; height:100dvh; z-index:110; display:flex; align-items:flex-start; justify-content:center; padding:28px 16px; overflow-y:auto; -webkit-overflow-scrolling:touch; opacity:0; visibility:hidden; transition:opacity .25s, visibility .25s; }
+@media(max-width:720px){ .modal{ padding:12px 8px; } }
 .modal.open{ opacity:1; visibility:visible; }
 .modal-bg{ position:fixed; inset:0; background:rgba(15,27,46,.55); backdrop-filter:none; -webkit-backdrop-filter:none; z-index:0; }
 .modal-box{ position:relative; background:var(--card); border:1px solid rgba(214,39,44,.35); border-radius:18px; width:100%; max-width:920px; min-height:80px; box-shadow:var(--shadow-lg), 0 0 0 1px rgba(0,0,0,.4); z-index:10; margin:auto; overflow:hidden; pointer-events:auto; }
@@ -346,6 +347,10 @@ svg{ display:block; }
 @media(max-width:720px){ .pd-grid{ grid-template-columns:1fr; } }
 .pd-gallery{ background:#f5f5f6; position:relative; }
 .pd-main{ aspect-ratio:1/1; position:relative; overflow:hidden; background:var(--bg); }
+/* Mobile: image ko poori screen jitna bara na hone dein — chota/fixed
+   rakhein taake price, size aur "Add to Cart" scroll kiye bina jaldi
+   nazar aa jayen (laptop wale full-square zoom se bachne ke liye). */
+@media(max-width:720px){ .pd-main{ aspect-ratio:auto; height:52vw; max-height:320px; min-height:220px; } }
 .pd-main{position:relative;overflow:hidden;background:#fff;}
 .pd-main img{ width:100%; height:100%; display:block; object-fit:contain; object-position:center; background:#fff; }
 .pd-nav{ position:absolute; top:50%; transform:translateY(-50%); width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.9); border:none; color:var(--navy); display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm); }
@@ -358,6 +363,7 @@ svg{ display:block; }
 .pd-thumbs img{ width:56px; height:56px; border-radius:8px; object-fit:cover; border:2px solid transparent; cursor:pointer; flex-shrink:0; }
 .pd-thumbs img.active{ border-color:var(--gold); }
 .pd-info{ padding:26px 28px; display:flex; flex-direction:column; }
+@media(max-width:720px){ .pd-info{ padding:18px 18px 22px; } }
 .pd-info .pd-badge{ align-self:flex-start; background:var(--deal-soft); color:var(--deal); font-size:.68rem; font-weight:700; padding:4px 10px; border-radius:6px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; }
 .pd-info h2{ font-size:1.4rem; font-weight:700; line-height:1.25; }
 .pd-rate{ display:flex; align-items:center; gap:10px; margin:10px 0 14px; font-size:.82rem; color:var(--muted); }
