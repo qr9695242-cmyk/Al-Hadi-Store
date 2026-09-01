@@ -81,6 +81,36 @@
   window.showDebugError = showError;
 })();
 
+/* ---------- body scroll lock (iOS-Safari-safe) ----------
+   Sirf "overflow:hidden" iOS Safari par kaafi nahi hota — jab page pehle
+   se scrolled ho aur modal khulay, background "fixed" overlays ke peechay
+   se glitch kar ke dikhta hai (jaisa product image/gallery khulnay par
+   hota tha). Yeh helper body ko "position:fixed" kar ke scroll ko asal
+   mein lock karta hai aur close hone par sahi scroll position par wapas
+   le jata hai. Counter isliye taake nested modals (jaisa product photo
+   ke andar zoom viewer) ek dusray ka lock overwrite na karein. */
+let SCROLL_LOCK_COUNT = 0;
+let SCROLL_LOCK_Y = 0;
+function lockBodyScroll(){
+  if(SCROLL_LOCK_COUNT === 0){
+    SCROLL_LOCK_Y = window.scrollY || window.pageYOffset || 0;
+    const b = document.body.style;
+    b.position = 'fixed';
+    b.top = (-SCROLL_LOCK_Y) + 'px';
+    b.left = '0'; b.right = '0'; b.width = '100%';
+    b.overflow = 'hidden';
+  }
+  SCROLL_LOCK_COUNT++;
+}
+function unlockBodyScroll(){
+  SCROLL_LOCK_COUNT = Math.max(0, SCROLL_LOCK_COUNT - 1);
+  if(SCROLL_LOCK_COUNT === 0){
+    const b = document.body.style;
+    b.position = ''; b.top = ''; b.left = ''; b.right = ''; b.width = ''; b.overflow = '';
+    window.scrollTo(0, SCROLL_LOCK_Y);
+  }
+}
+
 const DELIVERY_CHARGE = 200;
 const CATEGORY_LABELS = {
   kapray:'Clothing', joote:'Footwear', mobile:'Mobile & Accessories',
@@ -141,19 +171,41 @@ let USER_LIKES = new Set();
 // Setup instructions نیچے دیے ہیں
 const GOOGLE_SHEETS_URL = 'YOUR_GOOGLE_SHEETS_URL_HERE';
 
-/* ---------- shareable product links (?p=productId) ---------- */
+/* ---------- shareable product links (?p=readable-slug-productId) ----------
+   SEO: links used to be bare ?p=prod_xyz — no keywords for Google, nothing
+   readable for a human glancing at the URL. Now the link carries a slug
+   built from the product name (?p=pink-embroidered-lawn-suit-prod_xyz).
+   Every product id in this catalog starts with "prod_", so the real id is
+   recovered by matching that trailing token — old bare-id links (already
+   shared on WhatsApp, already in Google's index) keep working unchanged. */
 const PRODUCT_URL_PARAM = 'p';
 let deepLinkOpened = false;
 
+function slugify(text){
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 70)
+    .replace(/-+$/, '');
+}
+function extractProductId(raw){
+  if(!raw) return raw;
+  const m = String(raw).match(/prod_[A-Za-z0-9]+$/);
+  return m ? m[0] : raw;
+}
 function productShareURL(id){
-  return location.origin + location.pathname + '?' + PRODUCT_URL_PARAM + '=' + encodeURIComponent(id);
+  const p = ALL_PRODUCTS.find(x => x.id === id);
+  const slug = p ? slugify(p.name) : '';
+  const value = slug ? (slug + '-' + id) : id;
+  return location.origin + location.pathname + '?' + PRODUCT_URL_PARAM + '=' + encodeURIComponent(value);
 }
 /* Called after products are loaded (base catalog + Firestore sync) to
    auto-open the product a shared link points to. Safe to call multiple
    times — no-ops once the deep link has been handled. */
 function openProductFromURL(){
   if(deepLinkOpened) return;
-  const id = new URLSearchParams(location.search).get(PRODUCT_URL_PARAM);
+  const id = extractProductId(new URLSearchParams(location.search).get(PRODUCT_URL_PARAM));
   if(!id) return;
   const p = ALL_PRODUCTS.find(x => x.id === id);
   if(!p) return; // not loaded yet (e.g. admin-added product still syncing) — retried on next call
@@ -161,12 +213,12 @@ function openProductFromURL(){
   openProduct(id, true);
 }
 window.addEventListener('popstate', function(){
-  const id = new URLSearchParams(location.search).get(PRODUCT_URL_PARAM);
+  const id = extractProductId(new URLSearchParams(location.search).get(PRODUCT_URL_PARAM));
   const p = id ? ALL_PRODUCTS.find(x => x.id === id) : null;
   if(p){ openProduct(id, true); }
   else{
     document.getElementById('productModal').classList.remove('open');
-    document.body.style.overflow='';
+    unlockBodyScroll();
     resetPageSEO();
   }
 });
@@ -574,11 +626,11 @@ function openProduct(id, fromURL){
     console.error('renderDetail failed:', e);
     if(window.dispatchEvent){ window.dispatchEvent(new ErrorEvent('error', {message:'renderDetail crashed: ' + (e && e.message || e)})); }
     document.getElementById('productModal').classList.remove('open');
-    document.body.style.overflow='';
+    unlockBodyScroll();
     return;
   }
   document.getElementById('productModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
   updateProductSEO(p);
   if(!fromURL){
     try{ history.pushState({product:id}, '', productShareURL(id)); }catch(e){}
@@ -587,7 +639,7 @@ function openProduct(id, fromURL){
 function closeProduct(){
   const zoomOverlay = document.getElementById('pdZoomOverlay');
   if(zoomOverlay) zoomOverlay.classList.remove('open');
-  document.getElementById('productModal').classList.remove('open'); document.body.style.overflow='';
+  document.getElementById('productModal').classList.remove('open'); unlockBodyScroll();
   resetPageSEO();
   if(new URLSearchParams(location.search).get(PRODUCT_URL_PARAM)){
     try{ history.pushState({}, '', location.pathname); }catch(e){}
@@ -606,11 +658,12 @@ function renderDetail(){
 
   el.innerHTML =
     '<div class="pd-gallery">'+
-      '<div class="pd-main">'+
+      '<div class="pd-main" id="pdMainStage">'+
         '<img id="pdMainImg" src="'+(imgs[PD.index]?imgs[PD.index].src:'')+'" alt="'+escapeHtml(p.name)+'" onclick="openZoom()">'+
         '<span class="pd-zoom-hint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M9 11h4M11 9v4"/></svg>Zoom</span>'+
         (imgs.length>1 ? '<button class="pd-nav prev" onclick="pdSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>' : '')+
         (imgs.length>1 ? '<button class="pd-nav next" onclick="pdSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>' : '')+
+        (imgs.length>1 ? '<div class="pd-dots" id="pdDots">'+imgs.map((_,i)=>'<span class="'+(i===PD.index?'active':'')+'"></span>').join('')+'</div>' : '')+
       '</div>'+
       (imgs.length>1 ? '<div class="pd-thumbs" id="pdThumbs">'+thumbs+'</div>' : '')+
     '</div>'+
@@ -643,6 +696,27 @@ function renderDetail(){
   loadProductReviews(p.id);
   renderRelatedProducts(p);
   injectProductSchema(p);
+  setupPdSwipe();
+}
+/* swipe-to-change-image on the main product photo (mobile app feel) */
+function setupPdSwipe(){
+  const stage = document.getElementById('pdMainStage');
+  if(!stage || stage.dataset.swipeBound) return;
+  stage.dataset.swipeBound = '1';
+  let sx=0, sy=0, active=false;
+  stage.addEventListener('touchstart', function(e){
+    if(!e.touches || e.touches.length!==1) return;
+    active = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, {passive:true});
+  stage.addEventListener('touchend', function(e){
+    if(!active) return; active = false;
+    const t = e.changedTouches && e.changedTouches[0];
+    if(!t) return;
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if(Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)*1.4){
+      pdSlide(dx < 0 ? 1 : -1);
+    }
+  }, {passive:true});
 }
 function injectProductSchema(p){
   let tag = document.getElementById('productSchemaTag');
@@ -703,11 +777,11 @@ function openCompareModal(){
     '<tr><th>Stock</th>'+items.map(p=>'<td>'+((p.stockStatus==='out')?'Out of Stock':'In Stock')+'</td>').join('')+'</tr>'+
     '<tr><th></th>'+items.map(p=>'<td><button type="button" class="btn btn-gold" style="padding:7px 14px;font-size:.78rem;" onclick="closeCompareModal();openProduct(\''+p.id+'\')">View</button></td>').join('')+'</tr>';
   document.getElementById('compareModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
 }
 function closeCompareModal(){
   document.getElementById('compareModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
 }
 function clearCompare(){ setCompareIds([]); renderProducts(); renderCompareBar(); }
 
@@ -861,7 +935,7 @@ function openNotifications(){
     ).join('');
   }
   document.getElementById('notifModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
   // mark all as seen
   const seen = getSeenStatuses();
   NOTIF_UNREAD.forEach(n=>{ seen[n.id] = n.status; });
@@ -871,7 +945,7 @@ function openNotifications(){
 }
 function closeNotifications(){
   document.getElementById('notifModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
 }
 
 function renderRelatedProducts(p){
@@ -967,7 +1041,14 @@ async function submitReview(productId){
     errEl.style.display='block';
   }
 }
-function pdGo(i){ PD.index=i; document.getElementById('pdMainImg').src = PD.product.images[i].src; document.querySelectorAll('#pdThumbs img').forEach((t,idx)=>t.classList.toggle('active',idx===i)); }
+function pdGo(i){
+  PD.index=i;
+  document.getElementById('pdMainImg').src = PD.product.images[i].src;
+  document.querySelectorAll('#pdThumbs img').forEach((t,idx)=>t.classList.toggle('active',idx===i));
+  document.querySelectorAll('#pdDots span').forEach((d,idx)=>d.classList.toggle('active',idx===i));
+  const activeThumb = document.querySelectorAll('#pdThumbs img')[i];
+  if(activeThumb && activeThumb.scrollIntoView) activeThumb.scrollIntoView({inline:'center', block:'nearest', behavior:'smooth'});
+}
 function pdSlide(d){ const n=PD.product.images.length; pdGo((PD.index+d+n)%n); }
 
 /* ---------- fullscreen image zoom (pinch, double-tap, drag-to-pan) ---------- */
@@ -993,7 +1074,7 @@ function openZoom(){
   img.alt = PD.product.name || '';
   zoomReset(true);
   overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockBodyScroll();
   const nav = imgs.length > 1;
   document.getElementById('pdZoomPrev').style.display = nav ? 'flex' : 'none';
   document.getElementById('pdZoomNext').style.display = nav ? 'flex' : 'none';
@@ -1002,8 +1083,7 @@ function closeZoom(){
   const { overlay } = zoomEls();
   if(overlay) overlay.classList.remove('open');
   zoomReset(true);
-  if(!document.getElementById('productModal').classList.contains('open')) document.body.style.overflow='';
-  else document.body.style.overflow = 'hidden';
+  unlockBodyScroll();
 }
 function zoomSlide(d){
   if(!PD || !PD.product) return;
@@ -1160,8 +1240,8 @@ function updateCartUI(){
     document.getElementById('cartTotal').textContent = money(sub+DELIVERY_CHARGE);
   }
 }
-function openCart(){ try{ updateCartUI(); }catch(e){ console.error('updateCartUI failed:', e); } document.getElementById('cartOverlay').classList.add('open'); document.getElementById('cartDrawer').classList.add('open'); document.body.style.overflow='hidden'; }
-function closeCart(){ document.getElementById('cartOverlay').classList.remove('open'); document.getElementById('cartDrawer').classList.remove('open'); document.body.style.overflow=''; }
+function openCart(){ try{ updateCartUI(); }catch(e){ console.error('updateCartUI failed:', e); } document.getElementById('cartOverlay').classList.add('open'); document.getElementById('cartDrawer').classList.add('open'); lockBodyScroll(); }
+function closeCart(){ document.getElementById('cartOverlay').classList.remove('open'); document.getElementById('cartDrawer').classList.remove('open'); unlockBodyScroll(); }
 
 /* ---------- checkout ---------- */
 function openCheckout(){
@@ -1177,9 +1257,9 @@ function openCheckout(){
   const cm=document.getElementById('couponMsg'); if(cm){ cm.className='coupon-msg'; cm.textContent=''; }
   closeCart();
   document.getElementById('checkoutModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
 }
-function closeCheckout(){ document.getElementById('checkoutModal').classList.remove('open'); document.body.style.overflow=''; }
+function closeCheckout(){ document.getElementById('checkoutModal').classList.remove('open'); unlockBodyScroll(); }
 
 function buildCheckoutSummary(){
   const lines = document.getElementById('coLines');
@@ -1572,12 +1652,12 @@ let unverifiedLoginAttempt = null;
 
 function openAccount(){
   document.getElementById('accountModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
   updateAccountUI();
 }
 function closeAccount(){
   document.getElementById('accountModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
   ['liError','suError'].forEach(id=>{ const e=document.getElementById(id); if(e){ e.classList.remove('show'); e.textContent=''; } });
   hideForgotPassword();
   const resendWrap = document.getElementById('liResendWrap');
@@ -2003,10 +2083,10 @@ function isAdminLoggedIn(){
 
 function adminIconClick(){ isAdminLoggedIn() ? openAdminPanel() : openAdminLogin(); }
 
-function openAdminLogin(){ document.getElementById('adminLoginModal').classList.add('open'); document.body.style.overflow='hidden'; }
+function openAdminLogin(){ document.getElementById('adminLoginModal').classList.add('open'); lockBodyScroll(); }
 function closeAdminLogin(){
   document.getElementById('adminLoginModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
   document.getElementById('adminLoginError').classList.remove('show');
   document.getElementById('adminLoginForm').reset();
 }
@@ -2087,11 +2167,11 @@ function openAdminPanel(){
   renderAdminProductList();
   switchAdminTab('products');
   document.getElementById('adminPanelModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
 }
 function closeAdminPanel(){
   document.getElementById('adminPanelModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
   if(adminOrdersUnsub){ adminOrdersUnsub(); adminOrdersUnsub = null; }
 }
 
@@ -2730,11 +2810,11 @@ function openInvoice(id, o){
   document.getElementById('invDelivery').textContent = money(o.delivery||0);
   document.getElementById('invTotal').textContent = money(o.totalAmount||0);
   document.getElementById('invoiceModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
 }
 function closeInvoice(){
   document.getElementById('invoiceModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
 }
 function printInvoice(){ window.print(); }
 async function requestCancelOrder(orderId){
@@ -2755,12 +2835,12 @@ async function requestReturnOrder(orderId){
 }
 function openOrdersModal(){
   document.getElementById('ordersModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  lockBodyScroll();
   renderMyOrders();
 }
 function closeOrdersModal(){
   document.getElementById('ordersModal').classList.remove('open');
-  document.body.style.overflow='';
+  unlockBodyScroll();
 }
 function renderMyOrders(){
   const list = document.getElementById('myOrdersList');

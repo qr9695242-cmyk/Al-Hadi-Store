@@ -77,9 +77,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=4">
-<link rel="stylesheet" href="css/theme-3d.css?v=1">
-<link rel="stylesheet" href="css/app-shell.css?v=1">
+<link rel="stylesheet" href="css/style.css?v=7">
+<link rel="stylesheet" href="css/theme-3d.css?v=2">
+<link rel="stylesheet" href="css/app-shell.css?v=2">
 
 <!-- PWA: makes "Add to Home Screen" work like a real app -->
 <link rel="manifest" href="/manifest.json">
@@ -212,7 +212,9 @@
   <!-- ============ SHOP BY CATEGORY ============ -->
   <section class="cat-circles">
     <div class="cat-circles-head"><h2>Shop by Category</h2></div>
-    <div class="cat-circles-row" id="catCircles"></div>
+    <div class="cat-circles-wrap">
+      <div class="cat-circles-row" id="catCircles"></div>
+    </div>
   </section>
 
   <!-- ============ FLASH SALE ============ -->
@@ -365,18 +367,20 @@
   <div class="modal-box">
     <button class="modal-close" onclick="closeProduct()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <div class="pd-grid" id="productDetail"></div>
-  </div>
-</div>
 
-<!-- ============ IMAGE ZOOM VIEWER ============ -->
-<div class="pd-zoom-overlay" id="pdZoomOverlay">
-  <button class="pd-zoom-close" onclick="closeZoom()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <button class="pd-zoom-nav prev" id="pdZoomPrev" onclick="zoomSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
-  <button class="pd-zoom-nav next" id="pdZoomNext" onclick="zoomSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>
-  <div class="pd-zoom-stage" id="pdZoomStage">
-    <img id="pdZoomImg" src="" alt="">
+    <!-- Image zoom viewer: lives INSIDE the product modal box so it opens
+         attached/joined to the product card instead of as a separate
+         full-screen page. -->
+    <div class="pd-zoom-overlay" id="pdZoomOverlay">
+      <button class="pd-zoom-close" onclick="closeZoom()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <button class="pd-zoom-nav prev" id="pdZoomPrev" onclick="zoomSlide(-1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="pd-zoom-nav next" id="pdZoomNext" onclick="zoomSlide(1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg></button>
+      <div class="pd-zoom-stage" id="pdZoomStage">
+        <img id="pdZoomImg" src="" alt="">
+      </div>
+      <div class="pd-zoom-caption">Pinch ya double-tap se zoom karein · zoom hone par ghaseet kar dekhein</div>
+    </div>
   </div>
-  <div class="pd-zoom-caption">Pinch ya double-tap se zoom karein · zoom hone par ghaseet kar dekhein</div>
 </div>
 
 <!-- ============ NOTIFICATIONS MODAL ============ -->
@@ -1033,7 +1037,7 @@
 
 <script src="js/products-data.js?v=4"></script>
 
-<script src="js/app.js?v=11"></script>
+<script src="js/app.js?v=12"></script>
 <script src="js/tilt-3d.js?v=1"></script>
 
 <!-- PWA: register service worker for offline shell + Add-to-Home-Screen -->

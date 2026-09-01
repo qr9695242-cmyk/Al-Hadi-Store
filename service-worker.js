@@ -6,7 +6,7 @@
 // IMPORTANT: bump CACHE_NAME any time this file or the precache list
 // changes, so old phones/browsers throw away their stale cache instead of
 // serving an outdated copy of the site indefinitely.
-const CACHE_NAME = 'al-hadi-store-v6';
+const CACHE_NAME = 'al-hadi-store-v9';
 const STATIC_ASSETS = [
   '/css/style.css',
   '/css/theme-3d.css',
@@ -56,7 +56,14 @@ self.addEventListener('fetch', (event) => {
   // behind" — so we only fall back to the cached copy when there's no
   // internet at all.
   const isNavigation = req.mode === 'navigate';
-  const isAppCode = url.endsWith('.js') || url.endsWith('.css');
+  // NOTE: index.html loads these with cache-busting "?v=" query strings
+  // (e.g. app.js?v=12), so match on the path only — url.endsWith('.js')
+  // was always false for those requests and silently sent every app
+  // script/stylesheet down the stale cache-first path below instead of
+  // network-first, which is how old, already-fixed bugs kept reappearing
+  // on phones that had ever cached the site before.
+  const pathOnly = url.split('?')[0].split('#')[0];
+  const isAppCode = pathOnly.endsWith('.js') || pathOnly.endsWith('.css');
   if (isNavigation || isAppCode) {
     event.respondWith(
       fetch(req)
