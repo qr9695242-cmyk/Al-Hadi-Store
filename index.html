@@ -202,6 +202,10 @@
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         <span>Admin</span>
       </button>
+      <button id="sellerQuickAction" onclick="openSellerCenter()" style="display:none;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 10h16M6 10v9h12v-9M3 10l2-5h14l2 5M9 14h6"/></svg>
+        <span>Sell</span>
+      </button>
       <button onclick="openStoreSettings()">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.5-2.4.6a7.5 7.5 0 0 0-1.7-1L15 3h-4l-.3 2.6a7.5 7.5 0 0 0-1.7 1l-2.4-.6-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.5 2.4-.6a7.5 7.5 0 0 0 1.7 1L11 21h4l.3-2.6a7.5 7.5 0 0 0 1.7-1l2.4.6 2-3.5-2-1.5z"/></svg>
         <span>Settings</span>
@@ -668,6 +672,18 @@
         <button type="button" class="btn btn-navy" style="margin-top:20px;" onclick="logoutUser()">Log Out</button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ============ SELLER CENTER ============ -->
+<div class="modal" id="sellerModal" aria-hidden="true">
+  <div class="modal-bg" onclick="closeSellerCenter()"></div>
+  <div class="modal-box seller-modal-box">
+    <button class="modal-close" onclick="closeSellerCenter()" aria-label="Close seller center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="seller-shell">
+      <div class="seller-head"><div><span class="kicker">MARKETPLACE</span><h2>Seller Center</h2><p>Apni shop ko grow karein — clear steps, trusted selling.</p></div><span id="sellerStatusBadge" class="seller-status">Checking…</span></div>
+      <div id="sellerContent"></div>
     </div>
   </div>
 </div>

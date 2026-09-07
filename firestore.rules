@@ -112,6 +112,38 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Marketplace seller applications are private to the applicant; admins
+    // can review and transition status. Clients cannot self-approve.
+    match /sellerApplications/{sellerId} {
+      allow get: if isSignedIn() && (request.auth.uid == sellerId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == sellerId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == sellerId
+        && request.resource.data.uid == sellerId
+        && request.resource.data.status == 'pending');
+      allow delete: if isAdmin();
+    }
+
+    // Seller product submissions remain private until an admin approves them.
+    match /sellerProducts/{productId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.status == 'pending');
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+    }
+
+    // Public shop profiles can only be published by an admin.
+    match /shops/{shopId} {
+      allow get: if resource.data.status == 'approved' || isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow list: if true;
+      allow write: if isAdmin() || (isSignedIn() && request.resource.data.sellerId == request.auth.uid);
+    }
+
     // Everything else is denied by default (Firestore rules deny anything
     // not explicitly matched above), stated here for clarity.
     match /{document=**} {
