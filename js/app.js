@@ -1593,6 +1593,51 @@ function friendlyAuthError(error){
    a valid token, so we re-sign-in instead of reusing that object. */
 let unverifiedLoginAttempt = null;
 
+/* ---------- marketplace seller center ---------- */
+let SELLER_PROFILE = null;
+let SELLER_PRODUCTS = [];
+function sellerIsAdmin(){ return !!(currentUser && currentUser.email === ADMIN_EMAIL); }
+function sellerStatusLabel(status){ return status === 'approved' ? 'Approved seller' : status === 'rejected' ? 'Needs updates' : 'Application pending'; }
+function openSellerCenter(){
+  if(!currentUser){ openAccount(); toast('Seller Center ke liye pehle login karein'); return; }
+  document.getElementById('sellerModal').classList.add('open'); document.getElementById('sellerModal').setAttribute('aria-hidden','false'); lockBodyScroll(); loadSellerCenter();
+}
+function closeSellerCenter(){ const el=document.getElementById('sellerModal'); if(!el) return; el.classList.remove('open'); el.setAttribute('aria-hidden','true'); unlockBodyScroll(); }
+function updateSellerAccess(){
+  const ids=['sellerQuickAction','sellerAccountLink'];
+  ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=currentUser?'flex':'none'; });
+}
+function sellerTimestamp(){ return firebase.firestore.FieldValue.serverTimestamp(); }
+async function loadSellerCenter(){
+  const el=document.getElementById('sellerContent'); const badge=document.getElementById('sellerStatusBadge');
+  if(!el || !currentUser) return;
+  el.innerHTML='<div class="seller-card"><p>Seller profile load ho raha hai…</p></div>';
+  try{
+    const db=firebase.firestore(); const snap=await db.collection('sellerApplications').doc(currentUser.uid).get();
+    SELLER_PROFILE=snap.exists?snap.data():null; const status=SELLER_PROFILE&&SELLER_PROFILE.status||'none';
+    badge.textContent=status==='none'?'Not started':sellerStatusLabel(status); badge.className='seller-status '+(status==='rejected'?'rejected':status==='pending'?'pending':'');
+    if(sellerIsAdmin()){ await loadAdminSellerReviews(el); return; }
+    if(status!=='approved'){
+      el.innerHTML='<div class="seller-card"><h3>'+(status==='none'?'Start selling on Al Hadi Store':'Application '+(status==='pending'?'under review':'needs updates'))+'</h3><p>'+(status==='pending'?'Hum aapki details review kar rahe hain. Approval ke baad shop aur products manage kar sakenge.':'Pakistan bhar ke customers tak apni products pohanchayein.')+'</p><form class="seller-form" onsubmit="return submitSellerApplication(event)"><div class="frow"><label for="sellerName">Your name</label><input id="sellerName" required value="'+escapeHtml(SELLER_PROFILE&&SELLER_PROFILE.name||'')+'"></div><div class="frow"><label for="sellerShop">Shop name</label><input id="sellerShop" required value="'+escapeHtml(SELLER_PROFILE&&SELLER_PROFILE.shopName||'')+'"></div><div class="frow"><label for="sellerPhone">Phone number</label><input id="sellerPhone" required value="'+escapeHtml(SELLER_PROFILE&&SELLER_PROFILE.phone||'')+'"></div><div class="frow"><label for="sellerAbout">What will you sell?</label><textarea id="sellerAbout" required>'+escapeHtml(SELLER_PROFILE&&SELLER_PROFILE.about||'')+'</textarea></div><button class="btn btn-gold btn-block" type="submit">'+(status==='rejected'?'Resubmit application':'Apply to sell')+'</button><div id="sellerFormError" class="form-error"></div></form></div>'; return;
+    }
+    await renderSellerDashboard(el);
+  }catch(e){ el.innerHTML='<div class="seller-card"><h3>Seller Center unavailable</h3><p>Data load nahi ho saka. Dobara try karein.</p></div>'; }
+}
+async function submitSellerApplication(e){
+  e.preventDefault(); if(!currentUser) return false; const err=document.getElementById('sellerFormError'); if(err) err.textContent='';
+  const data={uid:currentUser.uid,email:currentUser.email||'',name:document.getElementById('sellerName').value.trim(),shopName:document.getElementById('sellerShop').value.trim(),phone:document.getElementById('sellerPhone').value.trim(),about:document.getElementById('sellerAbout').value.trim(),status:'pending',updatedAt:sellerTimestamp()};
+  if(data.name.length<2||data.shopName.length<2){ if(err){err.textContent='Name aur shop name zaroori hain.';err.classList.add('show');} return false; }
+  try{ await firebase.firestore().collection('sellerApplications').doc(currentUser.uid).set(data,{merge:true}); toast('Seller application submit ho gayi','success'); loadSellerCenter(); }catch(ex){ if(err){err.textContent='Save nahi ho saka. Permission check karein.';err.classList.add('show');} } return false;
+}
+async function renderSellerDashboard(el){
+  const db=firebase.firestore(); const snap=await db.collection('sellerProducts').where('sellerId','==',currentUser.uid).get(); SELLER_PRODUCTS=snap.docs.map(d=>Object.assign({_id:d.id},d.data()));
+  el.innerHTML='<div class="seller-grid"><div class="seller-card"><h3>'+escapeHtml(SELLER_PROFILE.shopName||'Your shop')+'</h3><p>'+escapeHtml(SELLER_PROFILE.about||'Your approved marketplace shop.')+'</p><div class="seller-kpis"><div class="seller-kpi"><b>'+SELLER_PRODUCTS.length+'</b><span>Products</span></div><div class="seller-kpi"><b>'+SELLER_PRODUCTS.filter(p=>p.status==='approved').length+'</b><span>Live</span></div><div class="seller-kpi"><b>Rs 0</b><span>Earnings</span></div></div></div><div class="seller-card"><h3>Next steps</h3><p class="seller-note">Products are reviewed before appearing publicly. Keep titles, prices and image links accurate.</p><button class="btn btn-navy btn-block" onclick="showSellerProductForm()">+ Submit product</button></div></div><div class="seller-card" style="margin-top:16px"><h3>Your product submissions</h3><div class="seller-list">'+(SELLER_PRODUCTS.length?SELLER_PRODUCTS.map(p=>'<div class="seller-list-row"><span>'+escapeHtml(p.name)+'<small> · Rs '+Number(p.price||0).toLocaleString('en-PK')+'</small></span><b class="seller-status '+(p.status==='pending'?'pending':p.status==='rejected'?'rejected':'')+'">'+(p.status||'pending')+'</b></div>').join(''):'<p class="seller-note">Abhi koi product submit nahi hua.</p>')+'</div><div id="sellerProductForm"></div></div>';
+}
+function showSellerProductForm(){ const el=document.getElementById('sellerProductForm'); if(!el)return; el.innerHTML='<form class="seller-form" onsubmit="return submitSellerProduct(event)"><div class="frow"><label for="spName">Product name</label><input id="spName" required></div><div class="frow"><label for="spCategory">Category</label><select id="spCategory"><option value="other">Lifestyle</option><option value="kapray">Clothing</option><option value="joote">Footwear</option><option value="electronics">Electronics</option></select></div><div class="frow"><label for="spPrice">Price (PKR)</label><input id="spPrice" type="number" min="1" required></div><div class="frow"><label for="spImage">Image URL</label><input id="spImage" type="url" required></div><div class="frow"><label for="spDesc">Description</label><textarea id="spDesc" required></textarea></div><button class="btn btn-gold" type="submit">Send for review</button></form>'; el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+async function submitSellerProduct(e){ e.preventDefault(); if(!currentUser)return false; const name=document.getElementById('spName').value.trim(), price=Number(document.getElementById('spPrice').value), image=document.getElementById('spImage').value.trim(); if(!name||!price||!image)return false; try{await firebase.firestore().collection('sellerProducts').add({sellerId:currentUser.uid,sellerEmail:currentUser.email||'',name:name,category:document.getElementById('spCategory').value,price:price,desc:document.getElementById('spDesc').value.trim(),image:image,status:'pending',createdAt:sellerTimestamp(),updatedAt:sellerTimestamp()}); toast('Product review ke liye bhej diya gaya','success'); loadSellerCenter();}catch(ex){toast('Product submit nahi ho saka');} return false; }
+async function loadAdminSellerReviews(el){ const snap=await firebase.firestore().collection('sellerApplications').where('status','==','pending').get(); el.innerHTML='<div class="seller-card"><h3>Seller applications</h3><p>Approve trusted sellers from one place.</p><div class="seller-list">'+(snap.empty?'<p class="seller-note">No pending applications.</p>':snap.docs.map(d=>{const a=d.data();return '<div class="seller-list-row"><span><b>'+escapeHtml(a.shopName||'Unnamed shop')+'</b><small>'+escapeHtml(a.email||'')+' · '+escapeHtml(a.phone||'')+'</small></span><button class="btn btn-navy" style="padding:7px 10px;font-size:.72rem" onclick="reviewSeller(\''+d.id+'\',\'approved\')">Approve</button></div>';}).join(''))+'</div></div>'; }
+async function reviewSeller(uid,status){ if(!sellerIsAdmin())return; try{await firebase.firestore().collection('sellerApplications').doc(uid).update({status:status,reviewedAt:sellerTimestamp(),reviewedBy:currentUser.uid}); toast('Seller status update ho gaya','success'); loadSellerCenter();}catch(e){toast('Status update nahi ho saka');} }
+
 function openAccount(){
   document.getElementById('accountModal').classList.add('open');
   lockBodyScroll();
@@ -1988,8 +2033,9 @@ function renderLikedGrid(){
 
 if(typeof firebase !== 'undefined' && firebase.auth){
   firebase.auth().onAuthStateChanged(function(user){
-    currentUser = user;
-    updateAccountUI();
+currentUser = user;
+  updateAccountUI();
+  updateSellerAccess();
     if(user){
       watchUserLikes(user.uid);
     } else {
