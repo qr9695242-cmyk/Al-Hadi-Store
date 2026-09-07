@@ -258,6 +258,15 @@
   </section>
 </main>
 
+<!-- ============ MARKETPLACE DIRECTORY ============ -->
+<section class="marketplace-section section" id="marketplace">
+  <div class="wrap">
+    <div class="sec-head"><div><span class="kicker">MARKETPLACE</span><h2><span class="bar"></span> Discover Shops</h2><p>Trusted sellers aur unki approved products ek jagah.</p></div><button class="btn btn-ghost" onclick="loadMarketplaceDirectory()">Refresh</button></div>
+    <div class="marketplace-tools"><input id="marketplaceSearch" type="search" placeholder="Shop ya product search karein…" oninput="renderMarketplaceDirectory()"><select id="marketplaceCategory" onchange="renderMarketplaceDirectory()"><option value="all">All categories</option><option value="kapray">Clothing</option><option value="joote">Footwear</option><option value="electronics">Electronics</option><option value="other">Lifestyle</option></select></div>
+    <div id="marketplaceDirectory" class="marketplace-directory"><div class="seller-card"><p>Approved shops yahan dikhengi.</p></div></div>
+  </div>
+</section>
+
 <!-- ============ PAYMENT SECTION ============ -->
 <section class="payment-sec section" id="payment">
   <div class="wrap">

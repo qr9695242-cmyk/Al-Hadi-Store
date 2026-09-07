@@ -1593,6 +1593,15 @@ function friendlyAuthError(error){
    a valid token, so we re-sign-in instead of reusing that object. */
 let unverifiedLoginAttempt = null;
 
+/* ---------- marketplace directory ---------- */
+let MARKETPLACE_SHOPS = [];
+async function loadMarketplaceDirectory(){
+  const el=document.getElementById('marketplaceDirectory'); if(!el) return;
+  el.innerHTML='<div class="seller-card"><p>Approved shops load ho rahi hain…</p></div>';
+  try{ const snap=await firebase.firestore().collection('sellerProducts').where('status','==','approved').limit(60).get(); const grouped={}; snap.forEach(d=>{const p=Object.assign({_id:d.id},d.data()); const key=p.sellerId||'store'; if(!grouped[key]) grouped[key]={sellerId:key,shopName:p.shopName||'Verified Seller',about:p.shopAbout||'Approved marketplace seller',products:[]}; grouped[key].products.push(p);}); MARKETPLACE_SHOPS=Object.values(grouped); renderMarketplaceDirectory(); }catch(e){ el.innerHTML='<div class="seller-card"><h3>Marketplace unavailable</h3><p>Approved shops abhi load nahi ho sakin.</p></div>'; }
+}
+function renderMarketplaceDirectory(){ const el=document.getElementById('marketplaceDirectory'); if(!el)return; const q=(document.getElementById('marketplaceSearch')?.value||'').toLowerCase().trim(), cat=document.getElementById('marketplaceCategory')?.value||'all'; const shops=MARKETPLACE_SHOPS.map(s=>Object.assign({},s,{products:s.products.filter(p=>(cat==='all'||catKey(p.category)===cat)&&(!q||((p.name+' '+s.shopName+' '+(p.desc||'')).toLowerCase().includes(q))))})).filter(s=>s.products.length); el.innerHTML=shops.length?shops.map(s=>'<article class="marketplace-shop"><h3>'+escapeHtml(s.shopName)+'</h3><p>'+escapeHtml(s.about)+'</p><div class="shop-products">'+s.products.slice(0,5).map(p=>'<div class="marketplace-product"><span>'+escapeHtml(p.name)+'</span><b>Rs '+Number(p.price||0).toLocaleString('en-PK')+'</b></div>').join('')+'</div></article>').join(''):'<div class="seller-card"><h3>No shops found</h3><p>Search ya category change karke dobara dekhein.</p></div>'; }
+
 /* ---------- marketplace seller center ---------- */
 let SELLER_PROFILE = null;
 let SELLER_PRODUCTS = [];
@@ -2697,6 +2706,7 @@ async function deleteAdminProduct(id){
 /* ---------- load products ---------- */
 function applyProducts(data){
   BASE_PRODUCTS = (data && data.products) || [];
+  loadMarketplaceDirectory();
   ALL_PRODUCTS = mergeProducts(BASE_PRODUCTS, loadCustomProducts());
   buildCategories();
   renderProducts();
