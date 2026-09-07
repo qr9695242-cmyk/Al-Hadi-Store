@@ -1605,7 +1605,7 @@ function openSellerCenter(){
 function closeSellerCenter(){ const el=document.getElementById('sellerModal'); if(!el) return; el.classList.remove('open'); el.setAttribute('aria-hidden','true'); unlockBodyScroll(); }
 function updateSellerAccess(){
   const ids=['sellerQuickAction','sellerAccountLink'];
-  ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=currentUser?'flex':'none'; });
+  ids.forEach(id=>{ const el=document.getElementById(id); if(el && id !== 'sellerQuickAction') el.style.display=currentUser?'flex':'none'; });
 }
 function sellerTimestamp(){ return firebase.firestore.FieldValue.serverTimestamp(); }
 async function loadSellerCenter(){
